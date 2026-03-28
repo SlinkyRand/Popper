@@ -256,6 +256,10 @@ html, body, #app {
     .drag-strip {
         flex: 1;
         height: 100%;
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        margin-left: 12px;
     }
 
     .window-controls {
