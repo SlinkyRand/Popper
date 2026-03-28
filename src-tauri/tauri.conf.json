@@ -1,6 +1,6 @@
 {
   "productName": "Popper Game",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "identifier": "com.popper.game",
   "build": {
     "beforeDevCommand": "npm run dev",

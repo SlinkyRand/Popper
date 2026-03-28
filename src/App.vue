@@ -1,7 +1,10 @@
 <script setup lang="ts">
-    import { onMounted, ref } from 'vue'
+    import { onMounted, ref, computed } from 'vue'
     import { getCurrentWindow, currentMonitor } from '@tauri-apps/api/window'
     import { useGameStore } from './stores/gameStore'
+    import { check } from '@tauri-apps/plugin-updater'
+    import { relaunch } from '@tauri-apps/plugin-process'
+    import { getPlatform } from './platform'
 
     const gameStore = useGameStore()
     const appWindow = getCurrentWindow()
@@ -11,7 +14,29 @@
     const prevSize = ref<any>(null)
     const prevPos = ref<any>(null)
 
+    async function checkForUpdatesSilently() {
+  try {
+    const update = await check()
+
+    if (!update) {
+      return
+    }
+
+    // Download and install updates in the background.
+    // Do not await progress callbacks unless you want UI for them.
+    await update.downloadAndInstall()
+
+    // Restart into the new version after install.
+    await relaunch()
+  } catch (error) {
+    // Keep startup resilient. Do not throw.
+    console.error('Background update failed:', error)
+  }
+}
+
     onMounted(async () => {
+         // Fire and forget so the app loads immediately.
+  void checkForUpdatesSilently()
         try {
             const appWindow = getCurrentWindow()
             await appWindow.setShadow(true)
@@ -20,49 +45,28 @@
         }
     })
 
+    const platform = getPlatform()
+
+    // Window control button handling
     async function handleMinimize() {
         await appWindow.minimize()
     }
 
     async function handleMaximizeToggle() {
-        try {
-            if (isCustomMaximized.value) {
-                if (prevSize.value && prevPos.value) {
-                    await appWindow.setSize(prevSize.value)
-                    await appWindow.setPosition(prevPos.value)
-                } else {
-                    await appWindow.unmaximize()
-                }
-                isCustomMaximized.value = false
-            } else {
-                const monitor = await currentMonitor()
-                if (monitor) {
-                    prevSize.value = await appWindow.outerSize()
-                    prevPos.value = await appWindow.outerPosition()
-                    
-                    await appWindow.setPosition(monitor.workArea.position)
-                    await appWindow.setSize(monitor.workArea.size)
-                    isCustomMaximized.value = true
-                } else {
-                    const maximized = await appWindow.isMaximized()
-                    if (maximized) {
-                        await appWindow.unmaximize()
-                    } else {
-                        await appWindow.maximize()
-                    }
-                }
-            }
-        } catch (e) {
-            console.error('Failed to toggle maximize', e)
+    try {
+        const maximized = await appWindow.isMaximized()
+        if (maximized) {
+            await appWindow.unmaximize()
+        } else {
+            await appWindow.maximize()
         }
+    } catch (e) {
+        console.error('Failed to toggle maximize', e)
+    }
     }
 
     async function handleClose() {
         await appWindow.close()
-    }
-
-    async function startDragging() {
-        await appWindow.startDragging()
     }
 
     function handleButtonClick(index: number) {
@@ -71,16 +75,34 @@
 </script>
 
 <template>
-    <div class="window-root">
+    <div class="window-root" 
+        :class="{
+            ios: platform.isIOS,
+            mac: platform.isMac,
+            windows: platform.isWindows,
+        }">
         <div class="window-surface">
             <header class="titlebar">
-                <div class="left-group" data-tauri-drag-region @mousedown="startDragging">
-                    <div class="app-icon"></div>
+                <!--Left section-->
+                <div class="left-group">
+                <div v-if="platform.isMac || platform.isIOS" class="traffic-lights">
+                    <button class="mac-btn close" @click.stop="handleClose" aria-label="Close">✕</button>
+                    <button class="mac-btn minimize" @click.stop="handleMinimize" aria-label="Minimize">—</button>
+                    <button class="mac-btn maximize" @click.stop="handleMaximizeToggle" aria-label="Maximize">❐</button>
+                </div>
+                <div v-else-if="platform.isWindows" class="app-icon"></div>
                 </div>
 
-                <div class="drag-strip" data-tauri-drag-region @mousedown="startDragging"></div>
+                <!--Middle section-->
+                <div class="drag-strip" data-tauri-drag-region>
+                    <div v-if="platform.isMac || platform.isIOS" class="title-text-mac">Popper Game</div>
+                    <div v-else-if="platform.isWindows" class="title-text-win">Popper Game</div>
+                
+                <!--end dragging controls-->
+                </div>
 
-                <div class="window-controls">
+                <!--Right section-->
+                <div v-if="platform.isWindows" class="window-controls">
                     <button class="win-btn" @click.stop="handleMinimize" aria-label="Minimize">—</button>
                     <button class="win-btn" @click.stop="handleMaximizeToggle" aria-label="Maximize">❐</button>
                     <button class="win-btn close" @click.stop="handleClose" aria-label="Close">✕</button>
@@ -109,32 +131,47 @@
     </div>
 </template>
 
-<style scoped>
+<style>
+html, body, #app {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+</style>
+
+<style scoped>   
     .window-root {
+        --window-radius: 16px;
         width: 100%;
         height: 100%;
-        padding: 6px;
-        background: rgba(16, 20, 28, 0.50);
-        color: wheat;
+        position: relative;
+        background: transparent;
         overflow: hidden;
     }
 
     .window-surface {
-        position: relative;
-        width: 100%;
-        height: 100%;
+        position: absolute;
+        inset: 0;
         display: flex;
         flex-direction: column;
         overflow: hidden;
-        border-radius: 12px;
-        background: rgba(16, 20, 28, 0.90);
+        border-radius: var(--window-radius);
+        background: linear-gradient(180deg, #07101d 0%, #0b1320 100%);
     }
 
         .window-surface::before {
             content: "";
             position: absolute;
             inset: 0;
-            border-radius: inherit;
+            border-radius: var(--window-radius);
+
+            /* glass edge */
+            box-shadow:
+                0 0 0 20px rgba(255,255,255,0.06),
+                0 8px 50px rgba(0,0,0,0.6),
+                inset 0 1px 0 rgba(255,255,255,0.08);
+
             padding: 1px;
             background: linear-gradient( 180deg, rgba(255,255,255,0.75), rgba(255,255,255,0.20) );
             backdrop-filter: blur(18px) saturate(160%);
@@ -151,12 +188,58 @@
         display: flex;
         align-items: center;
         padding: 0 8px 0 14px;
+        background: rgb(5, 14, 23)
     }
+
+    .traffic-lights {
+        position: absolute;
+        left: 14px
+        }
+
+    .mac-btn {
+        position: relative;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        }
+
+    /* authentic Mac colors */
+    .mac-btn.close    { background: #ff5f57; }
+    .mac-btn.minimize { background: #febc2e; }
+    .mac-btn.maximize { background: #28c840; }
+
+    .title-text-mac {
+        font-size: 13px;
+        font-weight: 500;
+        color: rgba(255,255,255,0.7);
+        pointer-events: none;
+        }
+
+    .mac-btn::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        opacity: 0;
+        }
+
+    .mac-btn.close:hover::after {
+        content: '×';
+        color: black;
+        font-size: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 1;
+        }   
 
     .left-group {
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 8px;
     }
 
     .app-icon {
@@ -177,7 +260,7 @@
 
     .window-controls {
         display: flex;
-        align-items: right;
+        align-items: center;
         gap: 0;
         margin-left: 8px;
     }
@@ -205,6 +288,13 @@
         pointer-events: none;
     }
 
+    .title-text-win {
+        font-size: 13px;
+        font-weight: 500;
+        color: rgba(255,255,255,0.82);
+        pointer-events: none;
+    }
+
     .title {
         font-size: 2rem;
         margin: 0 0 0.35rem 0;
@@ -226,7 +316,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 28px;
+        padding: 18px;
     }
 
     .button-grid {
