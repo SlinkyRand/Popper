@@ -1,0 +1,51 @@
+{
+  "productName": "Popper Game",
+  "version": "0.1.0",
+  "identifier": "com.popper.game",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Popper Game",
+        "width": 600,
+        "height": 900,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": false,
+        "transparent": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDhCN0NFMDhCMzU0NkE4RkQKUldUOXFFWTFpK0I4aXhrUWlRVHZ6enhLL0Z2Q2VvOTdNL0lWQ3M4eFBqWENJV3oyR1VJSjU4ekUK",
+      "endpoints": [
+        "https://github.com/SlinkyRand/Popper/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "createUpdaterArtifacts": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}

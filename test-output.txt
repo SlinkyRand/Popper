@@ -1,0 +1,69 @@
+﻿
+[1m[46m RUN [49m[22m [36mv4.1.2 [39m[90mC:/Users/Laura/Code/Test Button Popper[39m
+
+[90mstdout[2m | src/__tests__/gameStore.test.js[2m > [22m[2mgameStore[2m > [22m[2mpopRandom completes 10,000 pops in under 500ms
+[22m[39m  ΓÅ▒  10,000 pops: 178.59ms
+
+ [32mΓ£ô[39m src/__tests__/gameStore.test.js[2m > [22mgameStore[2m > [22minitializes with 16 buttons, only index 0 is up[32m 10[2mms[22m[39m
+ [32mΓ£ô[39m src/__tests__/gameStore.test.js[2m > [22mgameStore[2m > [22mpopRandom sets clicked button down and pops a different one up[32m 3[2mms[22m[39m
+ [32mΓ£ô[39m src/__tests__/gameStore.test.js[2m > [22mgameStore[2m > [22mignores clicks on buttons that are already down[32m 2[2mms[22m[39m
+ [32mΓ£ô[39m src/__tests__/gameStore.test.js[2m > [22mgameStore[2m > [22malways picks a different button (statistical check over 50 pops)[32m 7[2mms[22m[39m
+ [32mΓ£ô[39m src/__tests__/gameStore.test.js[2m > [22mgameStore[2m > [22mnever leaves zero or more than one button up[32m 30[2mms[22m[39m
+ [32mΓ£ô[39m src/__tests__/gameStore.test.js[2m > [22mgameStore[2m > [22mhandles rapid successive pops gracefully[32m 8[2mms[22m[39m
+ [32mΓ£ô[39m src/__tests__/gameStore.test.js[2m > [22mgameStore[2m > [22mdoes nothing if an out-of-bounds button is "clicked" (no up button)[32m 1[2mms[22m[39m
+ [32mΓ£ô[39m src/__tests__/gameStore.test.js[2m > [22mgameStore[2m > [22mpopRandom completes 10,000 pops in under 500ms[32m 180[2mms[22m[39m
+node.exe : 
+At line:1 char:1
++ & "C:\Program 
+Files\nodejs/node.exe" 
+"C:\Program 
+Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo        
+      : NotSpecified: (:  
+  String) [], RemoteExc   
+ eption
+    + FullyQualifiedError 
+   Id : NativeCommandErr  
+  or
+ 
+[31mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[3
+9m[1m[41m Failed Suites 
+1 [49m[22m[31mΓÄ»ΓÄ»ΓÄ»
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»[39m
+
+[41m[1m FAIL [22m[49m 
+src/__tests__/App.test.js
+[2m [ 
+src/__tests__/App.test.js 
+][22m
+[31m[1mTypeError[22m: 
+The argument 'filename' 
+must be a file URL 
+object, file URL string, 
+or absolute path string. 
+Received 
+'file:///icon.ico'[39m
+[31m[2mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ
+»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»Γ
+Ä»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[22m
+[39m
+[31m[1mSerialized 
+Error:[22m[39m [90m{ 
+code: 
+'ERR_INVALID_ARG_VALUE' 
+}[39m
+[31m[2mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ
+»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»Γ
+Ä»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»
+ΓÄ»[1/1]ΓÄ»[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m1 passed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[32m8 passed[39m[22m[90m (8)[39m
+[2m   Start at [22m 13:35:44
+[2m   Duration [22m 2.64s[2m (transform 328ms, setup 122ms, import 162ms, tests 245ms, environment 3.49s)[22m
+

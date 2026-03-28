@@ -1,0 +1,13 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\dist",
+    "\\public",
+    "\\src",
+    "\\src-tauri",
+    "\\src-tauri\\capabilities",
+    "\\src-tauri\\src"
+  ],
+  "SelectedNode": "\\src-tauri\\capabilities\\desktop.json",
+  "PreviewInSolutionExplorer": false
+}
