@@ -25,6 +25,7 @@ export type WindowStylePalette = {
   wallpaperUrl: string
   isLoading: boolean
   isFallback: boolean
+  isReady: boolean
   refresh: () => Promise<void>
 }
 
@@ -69,9 +70,10 @@ const FALLBACK_RAINBOW_PALETTE: PaletteColor[] = [
 ]
 
 const wallpaperUrl = ref('')
-const palette = ref<PaletteColor[]>([...FALLBACK_RAINBOW_PALETTE])
+const palette = ref<PaletteColor[]>([])
 const isLoading = ref(false)
-const isFallback = ref(true)
+const isFallback = ref(false)
+const isReady = ref(false)
 
 let lastWallpaperKey = ''
 
@@ -86,7 +88,8 @@ function loadCachedWallpaperPalette(): CachedWallpaperPalette | null {
       !parsed ||
       typeof parsed !== 'object' ||
       typeof parsed.wallpaperKey !== 'string' ||
-      !Array.isArray(parsed.palette)
+      !Array.isArray(parsed.palette) ||
+      parsed.palette.length === 0
     ) {
       return null
     }
@@ -117,10 +120,15 @@ function clearCachedWallpaperPalette() {
   }
 }
 
+function applyPalette(colors: PaletteColor[], fallback = false) {
+  palette.value = colors
+  isFallback.value = fallback
+  isReady.value = true
+}
+
 function applyFallbackPalette() {
-  palette.value = [...FALLBACK_RAINBOW_PALETTE]
   wallpaperUrl.value = ''
-  isFallback.value = true
+  applyPalette([...FALLBACK_RAINBOW_PALETTE], true)
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -182,6 +190,7 @@ async function extractPaletteFromWallpaper(src: string): Promise<PaletteColor[]>
 
 async function refresh() {
   isLoading.value = true
+  isReady.value = false
 
   try {
     const info = await invoke<WallpaperInfo>('get_wallpaper_info')
@@ -200,30 +209,28 @@ async function refresh() {
       cached.wallpaperKey === wallpaperKey &&
       cached.palette.length > 0
     ) {
-      palette.value = cached.palette
-      isFallback.value = false
+      applyPalette(cached.palette, false)
       lastWallpaperKey = wallpaperKey
       console.log('loaded palette from cache')
-
       return
     }
 
-    if (wallpaperKey === lastWallpaperKey && palette.value.length > 0 && !isFallback.value) {
+    if (
+      wallpaperKey === lastWallpaperKey &&
+      palette.value.length > 0 &&
+      !isFallback.value
+    ) {
+      isReady.value = true
       console.log('wallpaper unchanged in session, skipping')
       return
     }
 
-    const testImg = new Image()
-    testImg.crossOrigin = 'anonymous'
-    testImg.onload = () => console.log('wallpaper image loaded successfully')
-    testImg.onerror = (e) => console.error('wallpaper image failed to load', e)
-    testImg.src = src
+    await loadImage(src)
 
     const colors = await extractPaletteFromWallpaper(src)
     console.log('extracted colors:', colors)
 
-    palette.value = colors
-    isFallback.value = false
+    applyPalette(colors, false)
     lastWallpaperKey = wallpaperKey
     saveCachedWallpaperPalette(wallpaperKey, colors)
   } catch (error) {
@@ -252,6 +259,9 @@ export function useWallpaperPalette(): WindowStylePalette {
     get isFallback() {
       return isFallback.value
     },
+    get isReady() {
+      return isReady.value
+    },
     refresh,
   }
 }
@@ -261,6 +271,7 @@ export const wallpaperPaletteState = {
   wallpaperUrl,
   isLoading,
   isFallback,
+  isReady,
   hexes: computed(() => palette.value.map(color => color.hex)),
   refresh,
 }

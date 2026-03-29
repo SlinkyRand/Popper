@@ -12,6 +12,7 @@
     const palette = wallpaperPaletteState.palette
     const paletteHexes = wallpaperPaletteState.hexes
     const isFallback = wallpaperPaletteState.isFallback
+    const isReady = wallpaperPaletteState.isReady
     const gradientStyleVars = computed(() => ({
         '--wall-1': paletteHexes.value[0] ?? '#FF1744',
         '--wall-2': paletteHexes.value[1] ?? '#FF9100',
@@ -55,7 +56,7 @@
         } catch (err) {
             console.error('Failed to set shadow', err)
         }
-        wallpaperPaletteState.refresh()
+        await wallpaperPaletteState.refresh()
     })
 
     const platform = getPlatform()
@@ -109,7 +110,7 @@
     }"
   >
     <div class="window-surface" :style="gradientStyleVars">
-      <div class="gradient-layer" :data-fallback="isFallback" />
+      <div class="gradient-layer" :class="{ ready: isReady }" :data-fallback="isFallback" />
 
       <header class="titlebar">
         <div class="left-group">
@@ -224,7 +225,13 @@ html, body, #app {
             radial-gradient(circle at 90% 84%, var(--wall-6) 0%, transparent 22%),
             rgba(12, 12, 16, 0.92);
         z-index: 0;
+        opacity: 0;
+        transition: opacity 900ms ease;
     }
+
+        .gradient-layer.ready {
+        opacity: 1;
+        }
 
     .window-surface {
         position: absolute;

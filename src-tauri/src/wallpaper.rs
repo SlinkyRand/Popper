@@ -12,11 +12,9 @@ pub fn get_wallpaper_info() -> Result<WallpaperInfo, String> {
     let original_path = ::wallpaper::get()
         .map_err(|e| format!("Failed to get wallpaper path: {e}"))?;
 
-    // Read original wallpaper
     let bytes = std::fs::read(&original_path)
         .map_err(|e| format!("Failed to read wallpaper: {e}"))?;
 
-    // Write to temp file with extension
     let temp_path = std::env::temp_dir().join("popper_wallpaper.jpg");
 
     std::fs::write(&temp_path, bytes)
@@ -33,24 +31,4 @@ pub fn get_wallpaper_info() -> Result<WallpaperInfo, String> {
         path: temp_path.to_string_lossy().to_string(),
         cache_buster,
     })
-}
-
-const CACHE_KEY = 'wallpaperPalette'
-
-function loadCachedPalette() {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY)
-    if (!raw) return null
-    return JSON.parse(raw)
-  } catch {
-    return null
-  }
-}
-
-function saveCachedPalette(palette: any) {
-  try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(palette))
-  } catch {
-    // ignore storage errors
-  }
 }
