@@ -1,18 +1,32 @@
 <script setup lang="ts">
     import { onMounted, ref, computed } from 'vue'
-    import { getCurrentWindow, currentMonitor } from '@tauri-apps/api/window'
+    import { getCurrentWindow } from '@tauri-apps/api/window'
     import { useGameStore } from './stores/gameStore'
     import { check } from '@tauri-apps/plugin-updater'
     import { relaunch } from '@tauri-apps/plugin-process'
     import { getPlatform } from './platform'
+    import { wallpaperPaletteState } from './lib/wallpaperPalette'
 
     const gameStore = useGameStore()
     const appWindow = getCurrentWindow()
-    const isTest = import.meta.env.TEST
+    const palette = wallpaperPaletteState.palette
+    const paletteHexes = wallpaperPaletteState.hexes
+    const isFallback = wallpaperPaletteState.isFallback
+    const gradientStyleVars = computed(() => ({
+        '--wall-1': paletteHexes.value[0] ?? '#FF1744',
+        '--wall-2': paletteHexes.value[1] ?? '#FF9100',
+        '--wall-3': paletteHexes.value[2] ?? '#FFD600',
+        '--wall-4': paletteHexes.value[3] ?? '#00E676',
+        '--wall-5': paletteHexes.value[4] ?? '#00B0FF',
+        '--wall-6': paletteHexes.value[5] ?? '#7C4DFF',
+    }))
 
     const isCustomMaximized = ref(false)
     const prevSize = ref<any>(null)
     const prevPos = ref<any>(null)
+    
+    const sparkleBurstKey = ref(0)
+    const showSparkles = ref(false)
 
     async function checkForUpdatesSilently() {
   try {
@@ -35,14 +49,13 @@
 }
 
     onMounted(async () => {
-         // Fire and forget so the app loads immediately.
-  void checkForUpdatesSilently()
+        void checkForUpdatesSilently()
         try {
-            const appWindow = getCurrentWindow()
             await appWindow.setShadow(true)
         } catch (err) {
             console.error('Failed to set shadow', err)
         }
+        wallpaperPaletteState.refresh()
     })
 
     const platform = getPlatform()
@@ -72,63 +85,105 @@
     function handleButtonClick(index: number) {
         gameStore.popRandom(index)
     }
+    function triggerSparkles() {
+        sparkleBurstKey.value += 1
+        showSparkles.value = true
+        window.setTimeout(() => {
+            showSparkles.value = false
+        }, 900)
+    }
+
+    function handleCatButtonClick() {
+        gameStore.pressCatButton()
+        triggerSparkles()
+    }
 </script>
 
 <template>
-    <div class="window-root" 
-        :class="{
-            ios: platform.isIOS,
-            mac: platform.isMac,
-            windows: platform.isWindows,
-        }">
-        <div class="window-surface">
-            <header class="titlebar">
-                <!--Left section-->
-                <div class="left-group">
-                <div v-if="platform.isMac || platform.isIOS" class="traffic-lights">
-                    <button class="mac-btn close" @click.stop="handleClose" aria-label="Close">✕</button>
-                    <button class="mac-btn minimize" @click.stop="handleMinimize" aria-label="Minimize">—</button>
-                    <button class="mac-btn maximize" @click.stop="handleMaximizeToggle" aria-label="Maximize">❐</button>
-                </div>
-                <div v-else-if="platform.isWindows" class="app-icon"></div>
-                </div>
+  <div
+    class="window-root"
+    :class="{
+      ios: platform.isIOS,
+      mac: platform.isMac,
+      windows: platform.isWindows,
+    }"
+  >
+    <div class="window-surface" :style="gradientStyleVars">
+      <div class="gradient-layer" :data-fallback="isFallback" />
 
-                <!--Middle section-->
-                <div class="drag-strip" data-tauri-drag-region>
-                    <div v-if="platform.isMac || platform.isIOS" class="title-text-mac">Popper Game</div>
-                    <div v-else-if="platform.isWindows" class="title-text-win">Popper Game</div>
-                
-                <!--end dragging controls-->
-                </div>
-
-                <!--Right section-->
-                <div v-if="platform.isWindows" class="window-controls">
-                    <button class="win-btn" @click.stop="handleMinimize" aria-label="Minimize">—</button>
-                    <button class="win-btn" @click.stop="handleMaximizeToggle" aria-label="Maximize">❐</button>
-                    <button class="win-btn close" @click.stop="handleClose" aria-label="Close">✕</button>
-                </div>
-            </header>
-
-            <main class="content">
-                <div class="title-wrap">
-                    <h1 class="title">Popper Game</h1>
-                    <p class="subtitle">Click on the cat!</p>
-                </div>
-                <div class="button-grid">
-                    <button v-for="(isUp, index) in gameStore.buttons"
-                            :key="index"
-                            class="popper-button"
-                            :class="{ up: isUp, down: !isUp }"
-                            @click="handleButtonClick(index)">
-                        <div class="button-inner">
-                            <span v-if="isUp" class="emoji">🐱</span>
-                            <span v-else class="emoji">🕳️</span>
-                        </div>
-                    </button>
-                </div>
-            </main>
+      <header class="titlebar">
+        <div class="left-group">
+          <div v-if="platform.isMac || platform.isIOS" class="traffic-lights">
+            <button class="mac-btn close" @click.stop="handleClose" aria-label="Close">✕</button>
+            <button class="mac-btn minimize" @click.stop="handleMinimize" aria-label="Minimize">—</button>
+            <button class="mac-btn maximize" @click.stop="handleMaximizeToggle" aria-label="Maximize">❐</button>
+          </div>
+          <div v-else-if="platform.isWindows" class="app-icon"></div>
         </div>
+
+        <div class="drag-strip" data-tauri-drag-region>
+          <div v-if="platform.isMac || platform.isIOS" class="title-text-mac">Popper Game</div>
+          <div v-else-if="platform.isWindows" class="title-text-win">Popper Game</div>
+        </div>
+
+        <div v-if="platform.isWindows" class="window-controls">
+          <button class="win-btn" @click.stop="handleMinimize" aria-label="Minimize">—</button>
+          <button class="win-btn" @click.stop="handleMaximizeToggle" aria-label="Maximize">❐</button>
+          <button class="win-btn close" @click.stop="handleClose" aria-label="Close">✕</button>
+        </div>
+      </header>
+
+      <main class="content">
+        <div class="top-right">
+          <button class="cat-counter-button" @click="handleCatButtonClick">
+            <span class="cat-counter-icon">🪄</span>
+            <span class="cat-counter-value">{{ gameStore.weeklyCount }}</span>
+          </button>
+
+          <div
+            v-if="showSparkles"
+            :key="sparkleBurstKey"
+            class="sparkle-burst"
+            aria-hidden="true"
+          >
+            <span class="sparkle s1">✦</span>
+            <span class="sparkle s2">✦</span>
+            <span class="sparkle s3">✦</span>
+            <span class="sparkle s4">✦</span>
+            <span class="sparkle s5">✦</span>
+          </div>
+        </div>
+
+        <div class="title-wrap">
+          <h1 class="title">Popper Game</h1>
+          <p class="subtitle">Click on the cat!</p>
+        </div>
+
+        <div class="button-grid">
+          <button
+            v-for="(isUp, index) in gameStore.buttons"
+            :key="index"
+            class="popper-button"
+            :class="{ up: isUp, down: !isUp }"
+            @click="handleButtonClick(index)"
+          >
+            <div class="button-inner">
+              <span v-if="isUp" class="emoji">🐱</span>
+              <span v-else class="emoji">🕳️</span>
+            </div>
+          </button>
+        </div>
+      </main>
     </div>
+
+    <div class="cat-stats-panel">
+      <div>Today: {{ gameStore.todayCount }}</div>
+      <div>This week: {{ gameStore.weeklyCount }}</div>
+      <div>This month: {{ gameStore.monthCount }}</div>
+      <div>This year: {{ gameStore.yearCount }}</div>
+      <div>All time: {{ gameStore.allTimeCount }}</div>
+    </div>
+  </div>
 </template>
 
 <style>
@@ -148,6 +203,27 @@ html, body, #app {
         position: relative;
         background: transparent;
         overflow: hidden;
+    }
+
+    .swatch {
+        width: 28px;
+        height: 28px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .gradient-layer {
+        position: absolute;
+        inset: 0;
+        background:
+            radial-gradient(circle at 12% 22%, var(--wall-1) 0%, transparent 28%),
+            radial-gradient(circle at 28% 78%, var(--wall-2) 0%, transparent 26%),
+            radial-gradient(circle at 48% 18%, var(--wall-3) 0%, transparent 24%),
+            radial-gradient(circle at 67% 72%, var(--wall-4) 0%, transparent 26%),
+            radial-gradient(circle at 82% 28%, var(--wall-5) 0%, transparent 24%),
+            radial-gradient(circle at 90% 84%, var(--wall-6) 0%, transparent 22%),
+            rgba(12, 12, 16, 0.92);
+        z-index: 0;
     }
 
     .window-surface {
@@ -184,6 +260,7 @@ html, body, #app {
         }
 
     .titlebar {
+        position: relative;
         height: 40px;
         display: flex;
         align-items: center;
@@ -194,7 +271,7 @@ html, body, #app {
     .traffic-lights {
         position: absolute;
         left: 14px
-        }
+    }
 
     .mac-btn {
         position: relative;
@@ -375,5 +452,26 @@ html, body, #app {
     .emoji {
         filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.2));
         user-select: none;
+    }
+    
+    .s1 { top: 18px; left: 12px; animation-delay: 0ms; }
+    .s2 { top: 0px; left: 34px; animation-delay: 60ms; }
+    .s3 { top: 10px; right: 12px; animation-delay: 120ms; }
+    .s4 { bottom: 8px; left: 28px; animation-delay: 180ms; }
+    .s5 { bottom: 2px; right: 22px; animation-delay: 240ms; }
+
+    @keyframes sparkle-pop {
+    0% {
+        opacity: 0;
+        transform: translateY(6px) scale(0.4) rotate(0deg);
+    }
+    20% {
+        opacity: 1;
+        transform: translateY(0) scale(1) rotate(10deg);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-14px) scale(1.2) rotate(24deg);
+    }
     }
 </style>
