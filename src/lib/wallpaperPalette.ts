@@ -29,6 +29,75 @@ export type WindowStylePalette = {
   refresh: () => Promise<void>
 }
 
+type WallpaperPaletteRoles = {
+  background: string
+  surface: string
+  accent: string
+  accent2: string
+  accentSoft: string
+  highlight: string
+  text: string
+}
+
+function classifyPaletteRoles(colors: PaletteColor[]): WallpaperPaletteRoles {
+  if (!colors.length) {
+    return {
+      background: '#0b1320',
+      surface: '#101a2b',
+      accent: '#4facfe',
+      accent2: '#4ffeafff',
+      accentSoft: '#7df0d2',
+      highlight: '#dbeafe',
+      text: 'rgba(255,255,255,0.92)',
+    }
+  }
+
+  const byLightness = [...colors].sort((a, b) => a.lightness - b.lightness)
+
+  const background = byLightness[0]
+  const highlightPool = colors.filter(c => c.hex !== background.hex)
+
+  const accentCandidates = colors
+    .filter(c => c.lightness >= 0.4) // avoid very dark accents
+    .sort((a, b) => b.saturation - a.saturation)
+
+  const accent = accentCandidates[0] ?? colors[0]
+
+  const accent2 =
+    accentCandidates.find(c => c.hex !== accent.hex) ??
+    colors.find(c => c.hex !== accent.hex) ??
+    accent
+
+  const highlight =
+    [...highlightPool.filter(c => c.hex !== accent.hex)].sort((a, b) => b.lightness - a.lightness)[0] ??
+    [...colors.filter(c => c.hex !== accent.hex)].sort((a, b) => b.lightness - a.lightness)[0] ??
+    accent
+
+  const surface =
+    [...colors
+      .filter(c => c.hex !== background.hex && c.hex !== accent.hex && c.hex !== highlight.hex)]
+      .sort((a, b) => {
+        const aScore = Math.abs(a.lightness - 0.32)
+        const bScore = Math.abs(b.lightness - 0.32)
+        return aScore - bScore
+      })[0] ?? background
+
+  const accentSoft =
+    accentCandidates.find(
+      c => c.hex !== accent.hex && c.hex !== accent2.hex
+    ) ?? accent
+
+  return {
+    background: background.hex,
+    surface: surface.hex,
+    accent: accent.hex,
+    accent2: accent2.hex,
+    accentSoft: accentSoft.hex,
+    highlight: highlight.hex,
+    text: 'rgba(255,255,255,0.92)',
+  }
+}
+
 type CachedWallpaperPalette = {
   wallpaperKey: string
   palette: PaletteColor[]
@@ -273,5 +342,6 @@ export const wallpaperPaletteState = {
   isFallback,
   isReady,
   hexes: computed(() => palette.value.map(color => color.hex)),
+  roles: computed(() => classifyPaletteRoles(palette.value)),
   refresh,
 }

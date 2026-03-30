@@ -11,6 +11,7 @@
     const appWindow = getCurrentWindow()
     const palette = wallpaperPaletteState.palette
     const paletteHexes = wallpaperPaletteState.hexes
+    const roles = wallpaperPaletteState.roles
     const isFallback = wallpaperPaletteState.isFallback
     const isReady = wallpaperPaletteState.isReady
     const gradientStyleVars = computed(() => ({
@@ -20,6 +21,14 @@
         '--wall-4': paletteHexes.value[3] ?? '#00E676',
         '--wall-5': paletteHexes.value[4] ?? '#00B0FF',
         '--wall-6': paletteHexes.value[5] ?? '#7C4DFF',
+
+        '--wall-bg': roles.value.background,
+        '--wall-surface': roles.value.surface,
+        '--wall-accent': roles.value.accent,
+        '--wall-accent-2': roles.value.accent2,
+        '--wall-accent-soft': roles.value.accentSoft,
+        '--wall-highlight': roles.value.highlight,
+        '--wall-text': roles.value.text,
     }))
 
     const isCustomMaximized = ref(false)
@@ -135,46 +144,66 @@
       </header>
 
       <main class="content">
-        <div class="top-right">
-          <button class="cat-counter-button" @click="handleCatButtonClick">
-            <span class="cat-counter-icon">🪄</span>
-            <span class="cat-counter-value">{{ gameStore.weeklyCount }}</span>
-          </button>
+        <div class="layout-shell">
+            <section class="panel-zone zone-1">
+            <div class="zone-1-row zone-1-row-top">
+                <div class="title-wrap">
+                <h1 class="title">Popper Game</h1>
+                </div>
 
-          <div
-            v-if="showSparkles"
-            :key="sparkleBurstKey"
-            class="sparkle-burst"
-            aria-hidden="true"
-          >
-            <span class="sparkle s1">✦</span>
-            <span class="sparkle s2">✦</span>
-            <span class="sparkle s3">✦</span>
-            <span class="sparkle s4">✦</span>
-            <span class="sparkle s5">✦</span>
-          </div>
-        </div>
-
-        <div class="title-wrap">
-          <h1 class="title">Popper Game</h1>
-          <p class="subtitle">Click on the cat!</p>
-        </div>
-
-        <div class="button-grid">
-          <button
-            v-for="(isUp, index) in gameStore.buttons"
-            :key="index"
-            class="popper-button"
-            :class="{ up: isUp, down: !isUp }"
-            @click="handleButtonClick(index)"
-          >
-            <div class="button-inner">
-              <span v-if="isUp" class="emoji">🐱</span>
-              <span v-else class="emoji">🕳️</span>
+                <div class="top-right">
+                <div class="counter-pill" @click="handleCatButtonClick">
+                    <span class="icon">⭐</span>
+                    <span class="value">{{ gameStore.weeklyCount }}</span>
+                </div>
+                </div>
             </div>
-          </button>
+
+            <div class="zone-1-row zone-1-row-bottom">
+                <p class="subtitle">Click on the cat!</p>
+            </div>
+            </section>
+
+            <section class="panel-zone zone-2">
+            <div class="panel-card">
+                <div class="panel-card-content game-panel">
+                <div class="button-grid">
+                    <button
+                    v-for="(isUp, index) in gameStore.buttons"
+                    :key="index"
+                    class="popper-button"
+                    :class="{ up: isUp, down: !isUp }"
+                    @click="handleButtonClick(index)"
+                    >
+                    <div class="button-inner">
+                        <span v-if="isUp" class="emoji">🐱</span>
+                        <span v-else class="emoji">🕳️</span>
+                    </div>
+                    </button>
+                </div>
+                </div>
+            </div>
+            </section>
+
+            <section class="panel-zone zone-3">
+            <div class="panel-card">
+                <div class="panel-card-content"></div>
+            </div>
+            </section>
+
+            <section class="panel-zone zone-4">
+            <div class="panel-card">
+                <div class="panel-card-content"></div>
+            </div>
+            </section>
+
+            <section class="panel-zone zone-5">
+            <div class="panel-card">
+                <div class="panel-card-content"></div>
+            </div>
+            </section>
         </div>
-      </main>
+        </main>
     </div>
 
     <div class="cat-stats-panel">
@@ -200,7 +229,8 @@ html, body, #app {
     .window-root {
         --window-radius: 16px;
         width: 100%;
-        height: 100%;
+        height: 100dvh;
+        min-height: 100dvh;
         position: relative;
         background: transparent;
         overflow: hidden;
@@ -210,20 +240,19 @@ html, body, #app {
         width: 28px;
         height: 28px;
         border-radius: 999px;
-        border: 1px solid rgba(255, 255, 255, 0.12);
+        border: 0px solid rgba(255, 255, 255, 0.12);
     }
 
     .gradient-layer {
         position: absolute;
         inset: 0;
-        background:
-            radial-gradient(circle at 12% 22%, var(--wall-1) 0%, transparent 28%),
-            radial-gradient(circle at 28% 78%, var(--wall-2) 0%, transparent 26%),
-            radial-gradient(circle at 48% 18%, var(--wall-3) 0%, transparent 24%),
-            radial-gradient(circle at 67% 72%, var(--wall-4) 0%, transparent 26%),
-            radial-gradient(circle at 82% 28%, var(--wall-5) 0%, transparent 24%),
-            radial-gradient(circle at 90% 84%, var(--wall-6) 0%, transparent 22%),
-            rgba(12, 12, 16, 0.92);
+        background:   
+            radial-gradient(circle at -30% 40%, var(--wall-accent) 0%, transparent 45%),
+            radial-gradient(circle at 100% 45%, var(--wall-accent-soft) 0%, transparent 60%),
+            radial-gradient(circle at 100% 70%, var(--wall-accent-soft) 0%, transparent 40%),
+            radial-gradient(circle at 0% 40%, var(--wall-surface) 0%, transparent 40%),
+            radial-gradient(circle at 80% 0%, var(--wall-bg) 0%, transparent 28%),
+            var(--wall-bg);
         z-index: 0;
         opacity: 0;
         transition: opacity 900ms ease;
@@ -239,8 +268,9 @@ html, body, #app {
         display: flex;
         flex-direction: column;
         overflow: hidden;
+        min-height: 20dvh;
         border-radius: var(--window-radius);
-        background: linear-gradient(180deg, #07101d 0%, #0b1320 100%);
+        background: linear-gradient(180deg, #07101d 0%, #0b1320 10%);
     }
 
         .window-surface::before {
@@ -248,17 +278,27 @@ html, body, #app {
             position: absolute;
             inset: 0;
             border-radius: var(--window-radius);
+            z-index: 1;
 
-            /* glass edge */
-            box-shadow:
-                0 0 0 20px rgba(255,255,255,0.06),
-                0 8px 50px rgba(0,0,0,0.6),
-                inset 0 1px 0 rgba(255,255,255,0.08);
+            padding: 1.5px;
 
-            padding: 1px;
-            background: linear-gradient( 180deg, rgba(255,255,255,0.75), rgba(255,255,255,0.20) );
-            backdrop-filter: blur(18px) saturate(160%);
-            -webkit-backdrop-filter: blur(18px) saturate(140%);
+            background:
+                radial-gradient(circle at 100% 0%, var(--wall-accent) 0%, transparent 18%),    
+                radial-gradient(circle at 100% 20%, var(--wall-accent-soft) 0%, transparent 70%),
+                radial-gradient(circle at 100% 45%, var(--wall-highlight) 0%, transparent 70%),
+                radial-gradient(circle at 0% 45%, white 0%, transparent 35%),
+                radial-gradient(circle at 100% 80%, var(--wall-accent-2) 0%, transparent 42%),
+                radial-gradient(circle at 0% 40%, var(--wall-surface) 0%, transparent 40%),
+                radial-gradient(circle at 80% 0%, var(--wall-bg) 0%, transparent 28%),
+                
+                linear-gradient(
+                    165deg,
+                    rgba(255, 255, 255, 0.08),
+                    rgba(255, 255, 255, 0.40),
+                    rgba(255, 255, 255, 0.1)
+            );
+            backdrop-filter: saturate(160%);
+            -webkit-backdrop-filter: saturate(140%);
             -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
             mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
             -webkit-mask-composite: xor;
@@ -266,12 +306,23 @@ html, body, #app {
             pointer-events: none;
         }
 
+    .content {
+        --section-gap: 8px;
+        flex: 1 1 auto;
+        position: relative;
+        padding:
+            calc(8px + env(safe-area-inset-top, 0px))
+            8px
+            calc(8px + env(safe-area-inset-bottom, 0px));
+        overflow: hidden;
+    }
+
     .titlebar {
         position: relative;
         height: 40px;
         display: flex;
         align-items: center;
-        padding: 0 8px 0 14px;
+        padding: 0px 8px 0px 8px;
         background: rgb(5, 14, 23)
     }
 
@@ -298,7 +349,7 @@ html, body, #app {
     .title-text-mac {
         font-size: 13px;
         font-weight: 500;
-        color: rgba(255,255,255,0.7);
+        color: var(--wall-accent);
         pointer-events: none;
         }
 
@@ -349,22 +400,22 @@ html, body, #app {
     .window-controls {
         display: flex;
         align-items: center;
-        gap: 0;
+        gap: 6px;
         margin-left: 8px;
     }
 
     .win-btn {
-        width: 46px;
-        height: 32px;
+        width: 28px;
+        height: 28px;
         border: 0;
         background: transparent;
-        color: rgba(255,255,255,0.95);
+        color: var(--wall-text);
         cursor: pointer;
         border-radius: 8px;
     }
 
         .win-btn:hover {
-            background: rgba(255,255,255,0.08);
+            background: var(--wall-accent-soft);
         }
 
         .win-btn.close:hover {
@@ -372,46 +423,167 @@ html, body, #app {
             color: white;
         }
 
-    .title-wrap {
-        pointer-events: none;
-    }
-
     .title-text-win {
         font-size: 13px;
         font-weight: 500;
-        color: rgba(255,255,255,0.82);
+        color: var(--wall-text);
+        pointer-events: none;
+    }
+
+    .layout-shell {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+        grid-template-rows: auto minmax(280px, 1fr) minmax(160px, 0.72fr) minmax(160px, 0.72fr);
+        gap: 8px;
+        z-index: 1;
+    }
+
+    .panel-zone {
+        --section-padding: 0px;
+        position: relative;
+        border-radius: 8px;
+        border: 0px solid var(--wall-bg);
+        z-index: 1;
+    }
+
+    .zone-1 {
+        grid-column: 1 / 3;
+        grid-row: 1;
+        min-height: 24px;
+        padding: 6px 4px;
+        display: grid;
+        grid-template-rows: auto auto;
+        gap: var(--section-gap);
+    }
+
+    .zone-1-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--section-gap);
+    }
+
+    .zone-1-row-bottom {
+        justify-content: flex-start;
+    }
+
+    .zone-2 {
+        grid-column: 1;
+        grid-row: 2 / 5;
+        padding: var(--section-padding);
+    }
+
+    .zone-3 {
+        grid-column: 2;
+        grid-row: 2;
+        padding: var(--section-padding);
+    }
+
+    .zone-4 {
+        grid-column: 2;
+        grid-row: 3;
+        padding: var(--section-padding);
+    }
+
+    .zone-5 {
+        grid-column: 2;
+        grid-row: 4;
+        padding: var(--section-padding);
+    }
+
+    .panel-card {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+        border-radius: 8px;
+        background: linear-gradient(
+            180deg,
+            rgba(11, 19, 32, 0.72) 0%,
+            rgba(7, 14, 24, 0.82) 70%
+        );
+        border: 1px solid var(--wall-bg);
+        box-shadow:
+            0 10px 30px rgba(0, 0, 0, 0.22),
+            inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        z-index: 2;
+    }
+
+    .panel-card-content {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        z-index: 3;
+        overflow: auto;
+        scrollbar-width: thin;
+        scrollbar-color: var(--wall-accent) transparent;
+        scrollbar-gutter: stable;
+    }
+
+    .game-panel {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 12px;
+    }
+
+    .top-right {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: flex-end;
+        z-index: 4;
+    }
+
+    .title-wrap {
         pointer-events: none;
     }
 
     .title {
         font-size: 2rem;
-        margin: 0 0 0.35rem 0;
-        background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+        margin: 0;
+        background: var(--wall-text);
         -webkit-background-clip: text;
         background-clip: text;
         -webkit-text-fill-color: transparent;
-        font-weight: 800;
+        font-weight: 500;
     }
 
     .subtitle {
         margin: 0;
-        color: rgba(255, 255, 255, 0.62);
+        color: var(--wall-text);
         font-size: 1rem;
-    }
-
-    .content {
-        flex: 1 1 auto;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 18px;
     }
 
     .button-grid {
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 16px;
         width: min(100%, 520px);
+    }
+
+    @media (max-width: 860px) {
+        .layout-shell {
+            grid-template-columns: 1fr;
+            grid-template-rows: auto minmax(0px, auto) minmax(0px, auto) minmax(0px, auto) minmax(0px, auto);
+        }
+
+        .zone-1,
+        .zone-2,
+        .zone-3,
+        .zone-4,
+        .zone-5 {
+            grid-column: 1;
+        }
+
+        .zone-1 { grid-row: 1; }
+        .zone-2 { grid-row: 2; }
+        .zone-3 { grid-row: 3; }
+        .zone-4 { grid-row: 4; }
+        .zone-5 { grid-row: 5; }
     }
 
     .popper-button {
@@ -431,7 +603,7 @@ html, body, #app {
         }
 
         .popper-button.down {
-            background: rgba(0, 0, 0, 0.22);
+            background: var(--wall-bg);
             box-shadow: inset 0 4px 8px rgba(0, 0, 0, 0.45);
             transform: translateY(2px);
         }
@@ -454,6 +626,46 @@ html, body, #app {
         align-items: center;
         height: 100%;
         font-size: 1.5rem;
+    }
+
+    .counter-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+
+        padding: 6px 12px;
+        border-radius: 999px;
+
+        font-size: 14px;
+        font-weight: 600;
+
+        color: var(--wall-text);
+
+        background: linear-gradient(
+            180deg,
+            var(--wall-accent-soft),
+            var(--wall-surface)
+        );
+
+        backdrop-filter: blur(10px) saturate(140%);
+        -webkit-backdrop-filter: blur(10px) saturate(140%);
+
+        border: 1px solid var(--wall-bg);
+
+        box-shadow:
+            0 0 12px rgba(255, 200, 120, 0.25),
+            inset 0 1px 0 rgba(255, 255, 255, 0.25);
+
+        position: relative;
+        overflow: hidden;
+    }
+        .counter-pill .icon {
+            font-size: 14px;
+            filter: drop-shadow(0 0 4px var(--wall-surface));
+        }
+
+        .counter-pill .value {
+            letter-spacing: 0.2px;
     }
 
     .emoji {
