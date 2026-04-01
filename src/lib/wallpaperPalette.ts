@@ -44,8 +44,8 @@ function classifyPaletteRoles(colors: PaletteColor[]): WallpaperPaletteRoles {
     return {
       background: '#0b1320',
       surface: '#101a2b',
-      accent: '#4facfe',
-      accent2: '#4ffeafff',
+      accent: '#21b0d0ff',
+      accent2: '#1e629eff',
       accentSoft: '#7df0d2',
       highlight: '#dbeafe',
       text: 'rgba(255,255,255,0.92)',
@@ -83,9 +83,13 @@ function classifyPaletteRoles(colors: PaletteColor[]): WallpaperPaletteRoles {
       })[0] ?? background
 
   const accentSoft =
-    accentCandidates.find(
-      c => c.hex !== accent.hex && c.hex !== accent2.hex
-    ) ?? accent
+    [...colors
+      .filter(c => c.hex !== accent.hex && c.hex !== background.hex)]
+      .sort((a, b) => {
+        const satDiff = b.saturation - a.saturation
+        if (satDiff !== 0) return satDiff
+        return Math.abs(a.lightness - 0.6) - Math.abs(b.lightness - 0.6)
+      })[0] ?? accent
 
   return {
     background: background.hex,

@@ -6,10 +6,11 @@
     import { relaunch } from '@tauri-apps/plugin-process'
     import { getPlatform } from './platform'
     import { wallpaperPaletteState } from './lib/wallpaperPalette'
+    import FlyoutPanel from './components/FlyoutPanel.vue'
+    import { useFlyouts, type FlyoutId } from './composables/useFlyouts'
 
     const gameStore = useGameStore()
     const appWindow = getCurrentWindow()
-    const palette = wallpaperPaletteState.palette
     const paletteHexes = wallpaperPaletteState.hexes
     const roles = wallpaperPaletteState.roles
     const isFallback = wallpaperPaletteState.isFallback
@@ -70,6 +71,22 @@
 
     const platform = getPlatform()
 
+    const contentRef = ref<HTMLElement | null>(null)
+
+    const zone2Ref = ref<HTMLElement | null>(null)
+    const zone3Ref = ref<HTMLElement | null>(null)
+    const zone4Ref = ref<HTMLElement | null>(null)
+    const counterRef = ref<HTMLElement | null>(null)
+
+    const { activeFlyout, closeFlyout, toggleFlyout, isOpen } = useFlyouts()
+    const windowRootRef = ref<HTMLElement | null>(null)
+    const flyoutAnchors: Record<FlyoutId, typeof zone2Ref> = {
+    zone2: zone2Ref,
+    zone3: zone3Ref,
+    zone4: zone4Ref,
+    counter: counterRef,
+    }
+
     // Window control button handling
     async function handleMinimize() {
         await appWindow.minimize()
@@ -95,6 +112,11 @@
     function handleButtonClick(index: number) {
         gameStore.popRandom(index)
     }
+
+    function handleFlyoutToggle(id: FlyoutId) {
+        toggleFlyout(id)
+    }
+
     function triggerSparkles() {
         sparkleBurstKey.value += 1
         showSparkles.value = true
@@ -107,112 +129,171 @@
         gameStore.pressCatButton()
         triggerSparkles()
     }
+
 </script>
 
 <template>
   <div
-    class="window-root"
+    class="window-root" ref="windowRootRef"
     :class="{
       ios: platform.isIOS,
       mac: platform.isMac,
       windows: platform.isWindows,
     }"
+    :style="gradientStyleVars"
   >
-    <div class="window-surface" :style="gradientStyleVars">
-      <div class="gradient-layer" :class="{ ready: isReady }" :data-fallback="isFallback" />
-
-      <header class="titlebar">
-        <div class="left-group">
-          <div v-if="platform.isMac || platform.isIOS" class="traffic-lights">
-            <button class="mac-btn close" @click.stop="handleClose" aria-label="Close">✕</button>
-            <button class="mac-btn minimize" @click.stop="handleMinimize" aria-label="Minimize">—</button>
-            <button class="mac-btn maximize" @click.stop="handleMaximizeToggle" aria-label="Maximize">❐</button>
-          </div>
-          <div v-else-if="platform.isWindows" class="app-icon"></div>
-        </div>
-
-        <div class="drag-strip" data-tauri-drag-region>
-          <div v-if="platform.isMac || platform.isIOS" class="title-text-mac">Popper Game</div>
-          <div v-else-if="platform.isWindows" class="title-text-win">Popper Game</div>
-        </div>
-
-        <div v-if="platform.isWindows" class="window-controls">
-          <button class="win-btn" @click.stop="handleMinimize" aria-label="Minimize">—</button>
-          <button class="win-btn" @click.stop="handleMaximizeToggle" aria-label="Maximize">❐</button>
-          <button class="win-btn close" @click.stop="handleClose" aria-label="Close">✕</button>
-        </div>
-      </header>
-
-      <main class="content">
-        <div class="layout-shell">
-            <section class="panel-zone zone-1">
-            <div class="zone-1-row zone-1-row-top">
-                <div class="title-wrap">
-                <h1 class="title">Popper Game</h1>
-                </div>
-
-                <div class="top-right">
-                <div class="counter-pill" @click="handleCatButtonClick">
-                    <span class="icon">⭐</span>
-                    <span class="value">{{ gameStore.weeklyCount }}</span>
-                </div>
-                </div>
+    
+    <div class="app-shell">
+        <div class="gradient-layer" :class="{ ready: isReady }" :data-fallback="isFallback" />
+        <div class="window-surface">
+        <header class="titlebar">
+            <div class="left-group">
+            <div v-if="platform.isMac || platform.isIOS" class="traffic-lights">
+                <button class="mac-btn close" @click.stop="handleClose" aria-label="Close">✕</button>
+                <button class="mac-btn minimize" @click.stop="handleMinimize" aria-label="Minimize">—</button>
+                <button class="mac-btn maximize" @click.stop="handleMaximizeToggle" aria-label="Maximize">❐</button>
+            </div>
+            <div v-else-if="platform.isWindows" class="app-icon"></div>
             </div>
 
-            <div class="zone-1-row zone-1-row-bottom">
-                <p class="subtitle">Click on the cat!</p>
+            <div class="drag-strip" data-tauri-drag-region>
+            <div v-if="platform.isMac || platform.isIOS" class="title-text-mac">Popper Game</div>
+            <div v-else-if="platform.isWindows" class="title-text-win">Popper Game</div>
             </div>
-            </section>
 
-            <section class="panel-zone zone-2">
-            <div class="panel-card">
-                <div class="panel-card-content game-panel">
-                <div class="button-grid">
-                    <button
-                    v-for="(isUp, index) in gameStore.buttons"
-                    :key="index"
-                    class="popper-button"
-                    :class="{ up: isUp, down: !isUp }"
-                    @click="handleButtonClick(index)"
-                    >
-                    <div class="button-inner">
-                        <span v-if="isUp" class="emoji">🐱</span>
-                        <span v-else class="emoji">🕳️</span>
+            <div v-if="platform.isWindows" class="window-controls">
+            <button class="win-btn" @click.stop="handleMinimize" aria-label="Minimize">—</button>
+            <button class="win-btn" @click.stop="handleMaximizeToggle" aria-label="Maximize">❐</button>
+            <button class="win-btn close" @click.stop="handleClose" aria-label="Close">✕</button>
+            </div>
+        </header>
+
+        <main class="content" ref="contentRef">
+            <div class="layout-shell">
+                <section class="panel-zone zone-1">
+                <div class="zone-1-row zone-1-row-top">
+                    <div class="title-wrap">
+                    <h1 class="title">Popper Game</h1>
                     </div>
-                    </button>
+
+                    <div class="top-right">
+                    <div class="counter-pill" ref="counterRef" @click="handleFlyoutToggle('counter')">
+                        <span class="icon">⭐</span>
+                        <span class="value">{{ gameStore.weeklyCount }}</span>
+                    </div>
+                    </div>
                 </div>
+
+                <div class="zone-1-row zone-1-row-bottom">
+                    <p class="subtitle">Click on the cat!</p>
                 </div>
-            </div>
-            </section>
+                </section>
 
-            <section class="panel-zone zone-3">
-            <div class="panel-card">
-                <div class="panel-card-content"></div>
-            </div>
-            </section>
+                <section class="panel-zone zone-2" ref="zone2Ref" @click="handleFlyoutToggle('zone2')">
+                <div class="panel-card">
+                    <div class="panel-card-content game-panel">
+                    <div class="button-grid">
+                        <button
+                        v-for="(isUp, index) in gameStore.buttons"
+                        :key="index"
+                        class="popper-button"
+                        :class="{ up: isUp, down: !isUp }"
+                        @click="handleButtonClick(index)"
+                        >
+                        <div class="button-inner">
+                            <span v-if="isUp" class="emoji">🐱</span>
+                            <span v-else class="emoji">🕳️</span>
+                        </div>
+                        </button>
+                    </div>
+                    </div>
+                </div>
+                </section>
 
-            <section class="panel-zone zone-4">
-            <div class="panel-card">
-                <div class="panel-card-content"></div>
-            </div>
-            </section>
+                <section class="panel-zone zone-3" ref="zone3Ref" @click="handleFlyoutToggle('zone3')">
+                <div class="panel-card">
+                    <div class="panel-card-content"></div>
+                </div>
+                </section>
 
-            <section class="panel-zone zone-5">
-            <div class="panel-card">
-                <div class="panel-card-content"></div>
+                <section class="panel-zone zone-4" ref="zone4Ref" @click="handleFlyoutToggle('zone4')">
+                <div class="panel-card">
+                    <div class="panel-card-content"></div>
+                </div>
+                </section>
+
+                <section class="panel-zone zone-5">
+                <div class="panel-card">
+                    <div class="panel-card-content"></div>
+                </div>
+                </section>
             </div>
-            </section>
+            </main>
         </div>
-        </main>
     </div>
+    <div class="flyout-layer">
+            <FlyoutPanel
+                id="zone2"
+                :open="isOpen('zone2')"
+                title="Section 2"
+                subtitle="Game tools and controls"
+                :anchor-el="flyoutAnchors.zone2.value"
+                :container-el="windowRootRef"
+                @close="closeFlyout"
+                >
+                <div class="flyout-template-block">
+                    <div class="flyout-title">Section 2</div>
+                    <div class="flyout-subtitle">Game tools and controls</div>
+                    Put section 2 content here.
+                </div>
+            </FlyoutPanel>
 
-    <div class="cat-stats-panel">
-      <div>Today: {{ gameStore.todayCount }}</div>
-      <div>This week: {{ gameStore.weeklyCount }}</div>
-      <div>This month: {{ gameStore.monthCount }}</div>
-      <div>This year: {{ gameStore.yearCount }}</div>
-      <div>All time: {{ gameStore.allTimeCount }}</div>
-    </div>
+            <FlyoutPanel
+                id="zone3"
+                :open="isOpen('zone3')"
+                title="Section 3"
+                subtitle="Upper right panel details"
+                :anchor-el="flyoutAnchors.zone3.value"
+                :container-el="windowRootRef"
+                @close="closeFlyout"
+                >
+                <div class="flyout-template-block">
+                    Put section 3 content here.
+                </div>
+            </FlyoutPanel>
+
+            <FlyoutPanel
+                id="zone4"
+                :open="isOpen('zone4')"
+                title="Section 4"
+                subtitle="Middle right panel details"
+                :anchor-el="flyoutAnchors.zone4.value"
+                :container-el="windowRootRef"
+                @close="closeFlyout"
+                >
+                <div class="flyout-template-block">
+                    Put section 4 content here.
+                </div>
+            </FlyoutPanel>
+
+            <FlyoutPanel
+                id="counter"
+                :open="isOpen('counter')"
+                title="Counter"
+                subtitle="Cat click stats"
+                :anchor-el="flyoutAnchors.counter.value"
+                :container-el="windowRootRef"
+                @close="closeFlyout"
+                >
+                <div class="flyout-template-block">
+                    <div>Today: {{ gameStore.todayCount }}</div>
+                    <div>This week: {{ gameStore.weeklyCount }}</div>
+                    <div>This month: {{ gameStore.monthCount }}</div>
+                    <div>This year: {{ gameStore.yearCount }}</div>
+                    <div>All time: {{ gameStore.allTimeCount }}</div>
+                </div>
+            </FlyoutPanel>
+        </div>
   </div>
 </template>
 
@@ -228,12 +309,41 @@ html, body, #app {
 <style scoped>   
     .window-root {
         --window-radius: 16px;
-        width: 100%;
+        --bg-gradient:   
+            radial-gradient(circle at -30% 40%, var(--wall-accent) 0%, transparent 45%),
+            radial-gradient(circle at 100% 45%, var(--wall-accent-soft) 0%, transparent 60%),
+            radial-gradient(circle at 100% 70%, var(--wall-accent-soft) 0%, transparent 40%),
+            radial-gradient(circle at 0% 40%, var(--wall-surface) 0%, transparent 40%),
+            radial-gradient(circle at 80% 0%, var(--wall-bg) 0%, transparent 28%),
+            var(--wall-bg);
+        --border-gradient:
+            radial-gradient(circle at 100% 0%, var(--wall-accent) 0%, transparent 18%),    
+            radial-gradient(circle at 100% 20%, var(--wall-accent-soft) 0%, transparent 70%),
+            radial-gradient(circle at 100% 45%, var(--wall-highlight) 0%, transparent 70%),
+            radial-gradient(circle at 0% 45%, white 0%, transparent 35%),
+            radial-gradient(circle at 100% 80%, var(--wall-accent-2) 0%, transparent 42%),
+            radial-gradient(circle at 0% 40%, var(--wall-surface) 0%, transparent 40%),
+            radial-gradient(circle at 80% 0%, var(--wall-bg) 0%, transparent 28%),
+            linear-gradient(
+                165deg,
+                rgba(255, 255, 255, 0.08),
+                rgba(255, 255, 255, 0.40),
+                rgba(255, 255, 255, 0.1)
+            );
+        width: 100dvw;
         height: 100dvh;
         min-height: 100dvh;
-        position: relative;
         background: transparent;
-        overflow: hidden;
+        position: relative;
+        overflow: visible;
+    }
+
+    .app-shell {
+        position: absolute;
+        inset: 0;
+        padding: 0;
+        z-index: 10;
+        left: 358px; /* 350 flyout + 8 gap */
     }
 
     .swatch {
@@ -246,13 +356,8 @@ html, body, #app {
     .gradient-layer {
         position: absolute;
         inset: 0;
-        background:   
-            radial-gradient(circle at -30% 40%, var(--wall-accent) 0%, transparent 45%),
-            radial-gradient(circle at 100% 45%, var(--wall-accent-soft) 0%, transparent 60%),
-            radial-gradient(circle at 100% 70%, var(--wall-accent-soft) 0%, transparent 40%),
-            radial-gradient(circle at 0% 40%, var(--wall-surface) 0%, transparent 40%),
-            radial-gradient(circle at 80% 0%, var(--wall-bg) 0%, transparent 28%),
-            var(--wall-bg);
+        background: var(--bg-gradient);
+        border-radius: 16px;
         z-index: 0;
         opacity: 0;
         transition: opacity 900ms ease;
@@ -270,7 +375,10 @@ html, body, #app {
         overflow: hidden;
         min-height: 20dvh;
         border-radius: var(--window-radius);
-        background: linear-gradient(180deg, #07101d 0%, #0b1320 10%);
+        background: 
+            var(--bg-gradient),
+            linear-gradient(180deg, #07101d 20%, #0b1320 50%);
+        pointer-events: auto;
     }
 
         .window-surface::before {
@@ -279,24 +387,8 @@ html, body, #app {
             inset: 0;
             border-radius: var(--window-radius);
             z-index: 1;
-
             padding: 1.5px;
-
-            background:
-                radial-gradient(circle at 100% 0%, var(--wall-accent) 0%, transparent 18%),    
-                radial-gradient(circle at 100% 20%, var(--wall-accent-soft) 0%, transparent 70%),
-                radial-gradient(circle at 100% 45%, var(--wall-highlight) 0%, transparent 70%),
-                radial-gradient(circle at 0% 45%, white 0%, transparent 35%),
-                radial-gradient(circle at 100% 80%, var(--wall-accent-2) 0%, transparent 42%),
-                radial-gradient(circle at 0% 40%, var(--wall-surface) 0%, transparent 40%),
-                radial-gradient(circle at 80% 0%, var(--wall-bg) 0%, transparent 28%),
-                
-                linear-gradient(
-                    165deg,
-                    rgba(255, 255, 255, 0.08),
-                    rgba(255, 255, 255, 0.40),
-                    rgba(255, 255, 255, 0.1)
-            );
+            background: var(--border-gradient);
             backdrop-filter: saturate(160%);
             -webkit-backdrop-filter: saturate(140%);
             -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
@@ -315,6 +407,19 @@ html, body, #app {
             8px
             calc(8px + env(safe-area-inset-bottom, 0px));
         overflow: hidden;
+    }
+
+    /* Flyout Layer reserved space. This is the only flyout-level styling that belongs in the main file*/
+    .flyout-layer {
+        position: absolute;
+        inset: 0;
+        z-index: 40;
+        overflow: visible;
+        pointer-events: none;
+    }
+
+    .flyout-layer > * {
+        pointer-events: auto;
     }
 
     .titlebar {
