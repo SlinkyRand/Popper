@@ -1,0 +1,1 @@
+// Hotkey capture, normalization, reserved-key checks, conflict detection.

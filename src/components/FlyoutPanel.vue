@@ -100,11 +100,10 @@ onBeforeUnmount(() => {
   position: absolute;
   left: 8px;
   width: 350px;
-  z-index: 50;
+  z-index: 10;
   pointer-events: auto;
   background: transparent;
   border: none;
-  box-shadow: none;
 }
 
 .flyout-shell::before,

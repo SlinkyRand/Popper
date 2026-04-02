@@ -1,0 +1,1 @@
+/* Renders the active preference tab (General, Hotkeys, or Lists). */

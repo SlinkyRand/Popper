@@ -1,0 +1,1 @@
+// Cloud-ready adapter stub. Not wiring cloud yet, but creating the seam now.

@@ -1,0 +1,1 @@
+/* Component for List control type. */

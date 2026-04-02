@@ -1,0 +1,1 @@
+/* Component for Hotkey control type. */

@@ -61,11 +61,7 @@
 
     onMounted(async () => {
         void checkForUpdatesSilently()
-        try {
-            await appWindow.setShadow(true)
-        } catch (err) {
-            console.error('Failed to set shadow', err)
-        }
+        await appWindow.setShadow(false)
         await wallpaperPaletteState.refresh()
     })
 
@@ -315,7 +311,7 @@ html, body, #app {
             radial-gradient(circle at 100% 70%, var(--wall-accent-soft) 0%, transparent 40%),
             radial-gradient(circle at 0% 40%, var(--wall-surface) 0%, transparent 40%),
             radial-gradient(circle at 80% 0%, var(--wall-bg) 0%, transparent 28%),
-            var(--wall-bg);
+            rgba(7, 14, 24, 0.82);
         --border-gradient:
             radial-gradient(circle at 100% 0%, var(--wall-accent) 0%, transparent 18%),    
             radial-gradient(circle at 100% 20%, var(--wall-accent-soft) 0%, transparent 70%),
@@ -333,7 +329,7 @@ html, body, #app {
         width: 100dvw;
         height: 100dvh;
         min-height: 100dvh;
-        background: transparent;
+        background: transparent;    
         position: relative;
         overflow: visible;
     }
