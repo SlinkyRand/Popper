@@ -1,68 +1,240 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-
-type FlyoutId = 'zone2' | 'zone3' | 'zone4' | 'counter'
+import { usePreferenceStore } from '@/stores/preferenceStore'
+import {
+  FLYOUT_HEIGHT_DEFAULT,
+  FLYOUT_HEIGHT_MAX,
+  FLYOUT_HEIGHT_MIN,
+  FLYOUT_WIDTH_DEFAULT,
+  FLYOUT_WIDTH_MAX,
+  FLYOUT_WIDTH_MIN,
+} from '@/data/preferences/preference.constants'
+import {
+  GLOBAL_FLYOUT_WIDTH_PREFERENCE_ID,
+  getFlyoutHeightPreferenceId,
+  getFlyoutWidthPreferenceId,
+  type FlyoutId,
+} from '@/lib/flyoutLayout'
 
 const props = defineProps<{
   id: FlyoutId
   open: boolean
+  side: 'left' | 'right'
   title: string
   subtitle?: string
   anchorEl?: HTMLElement | null
   containerEl?: HTMLElement | null
 }>()
 
-const emit = defineEmits<{
-  (e: 'close'): void
-}>()
-
-const flyoutEl = ref<HTMLElement | null>(null)
+const preferenceStore = usePreferenceStore()
 const topPx = ref(0)
+const panelWidth = ref(FLYOUT_WIDTH_DEFAULT)
+const panelHeight = ref(FLYOUT_HEIGHT_DEFAULT)
+
+function clampWidth(value: number) {
+  return Math.min(FLYOUT_WIDTH_MAX, Math.max(FLYOUT_WIDTH_MIN, value))
+}
+
+function clampHeight(value: number, availableHeight = FLYOUT_HEIGHT_MAX) {
+  const boundedMax = Math.max(
+    FLYOUT_HEIGHT_MIN,
+    Math.min(FLYOUT_HEIGHT_MAX, availableHeight),
+  )
+
+  return Math.min(boundedMax, Math.max(FLYOUT_HEIGHT_MIN, value))
+}
+
+function readPreferredWidth(): number {
+  return clampWidth(
+    Number(
+      preferenceStore.get(getFlyoutWidthPreferenceId(props.id)) ??
+        preferenceStore.get(GLOBAL_FLYOUT_WIDTH_PREFERENCE_ID) ??
+        FLYOUT_WIDTH_DEFAULT,
+    ),
+  )
+}
+
+function readPreferredHeight(): number {
+  return clampHeight(
+    Number(
+      preferenceStore.get(getFlyoutHeightPreferenceId(props.id)) ??
+        FLYOUT_HEIGHT_DEFAULT,
+    ),
+    getAvailableHeight(),
+  )
+}
+
+function getAvailableHeight() {
+  const container = props.containerEl
+  if (!container) return FLYOUT_HEIGHT_MAX
+
+  const containerRect = container.getBoundingClientRect()
+  if (containerRect.height <= 0) return FLYOUT_HEIGHT_MAX
+
+  return Math.max(FLYOUT_HEIGHT_MIN, containerRect.height - topPx.value - 8)
+}
 
 const styleVars = computed(() => ({
   top: `${topPx.value}px`,
-  width: '350px',
+  width: `${panelWidth.value}px`,
+  height: `${panelHeight.value}px`,
+  left: props.side === 'left' ? '0px' : 'auto',
+  right: props.side === 'right' ? '0px' : 'auto',
+  '--pref-flyout-width': `${panelWidth.value}px`,
 }))
+
+let widthResizeStartX = 0
+let widthResizeStartValue = 0
+let isWidthResizing = false
+
+let heightResizeStartY = 0
+let heightResizeStartValue = 0
+let isHeightResizing = false
 
 async function updatePosition() {
   await nextTick()
 
   const anchor = props.anchorEl
   const container = props.containerEl
-  const flyout = flyoutEl.value
-
-  if (!anchor || !container || !flyout) return
+  if (!anchor || !container) return
 
   const anchorRect = anchor.getBoundingClientRect()
   const containerRect = container.getBoundingClientRect()
-  const flyoutHeight = flyout.offsetHeight
-
   const desiredTop = anchorRect.top - containerRect.top
-  const maxTop = Math.max(0, containerRect.height - flyoutHeight)
 
+  topPx.value = Math.max(0, desiredTop)
+  panelHeight.value = clampHeight(panelHeight.value, getAvailableHeight())
+
+  const maxTop = Math.max(0, containerRect.height - panelHeight.value - 8)
   topPx.value = Math.max(0, Math.min(desiredTop, maxTop))
+  panelHeight.value = clampHeight(panelHeight.value, getAvailableHeight())
+}
+
+function persistWidth(nextWidth: number) {
+  panelWidth.value = clampWidth(nextWidth)
+  preferenceStore.set(getFlyoutWidthPreferenceId(props.id), panelWidth.value)
+}
+
+function persistHeight(nextHeight: number) {
+  panelHeight.value = clampHeight(nextHeight, getAvailableHeight())
+  preferenceStore.set(getFlyoutHeightPreferenceId(props.id), panelHeight.value)
+}
+
+function startWidthResize(event: MouseEvent) {
+  isWidthResizing = true
+  widthResizeStartX = event.clientX
+  widthResizeStartValue = panelWidth.value
+
+  console.log('[flyout-resize] start', {
+    id: props.id,
+    side: props.side,
+    width: panelWidth.value,
+    clientX: event.clientX,
+  })
+
+  window.addEventListener('mousemove', onWidthResize)
+  window.addEventListener('mouseup', stopWidthResize)
+
+  event.preventDefault()
+  event.stopPropagation()
+}
+
+function onWidthResize(event: MouseEvent) {
+  if (!isWidthResizing) return
+
+  const delta =
+    props.side === 'left'
+      ? widthResizeStartX - event.clientX
+      : event.clientX - widthResizeStartX
+
+  const nextWidth = widthResizeStartValue + delta
+
+  console.log('[flyout-resize] move', {
+    id: props.id,
+    side: props.side,
+    clientX: event.clientX,
+    delta,
+    startWidth: widthResizeStartValue,
+    nextWidth,
+  })
+
+  persistWidth(nextWidth)
+}
+
+function stopWidthResize() {
+  console.log('[flyout-resize] stop', {
+    id: props.id,
+    width: panelWidth.value,
+  })
+
+  isWidthResizing = false
+  window.removeEventListener('mousemove', onWidthResize)
+  window.removeEventListener('mouseup', stopWidthResize)
+}
+
+function startHeightResize(event: MouseEvent) {
+  isHeightResizing = true
+  heightResizeStartY = event.clientY
+  heightResizeStartValue = panelHeight.value
+
+  window.addEventListener('mousemove', onHeightResize)
+  window.addEventListener('mouseup', stopHeightResize)
+
+  event.preventDefault()
+  event.stopPropagation()
+}
+
+function onHeightResize(event: MouseEvent) {
+  if (!isHeightResizing) return
+
+  const delta = event.clientY - heightResizeStartY
+  persistHeight(heightResizeStartValue + delta)
+}
+
+function stopHeightResize() {
+  isHeightResizing = false
+  window.removeEventListener('mousemove', onHeightResize)
+  window.removeEventListener('mouseup', stopHeightResize)
 }
 
 function handleWindowChange() {
-  if (props.open) void updatePosition()
+  if (props.open) {
+    panelHeight.value = clampHeight(panelHeight.value, getAvailableHeight())
+    void updatePosition()
+  }
 }
 
 watch(
-  () => [props.open, props.anchorEl, props.containerEl],
+  () => props.open,
+  async (open) => {
+    if (!open) return
+
+    panelWidth.value = readPreferredWidth()
+    panelHeight.value = readPreferredHeight()
+    await updatePosition()
+  },
+  { immediate: true },
+)
+
+watch(
+  () => [props.anchorEl, props.containerEl],
   async () => {
     if (props.open) {
       await updatePosition()
     }
   },
-  { immediate: true }
 )
 
 onMounted(() => {
+  panelWidth.value = readPreferredWidth()
+  panelHeight.value = readPreferredHeight()
   window.addEventListener('resize', handleWindowChange)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleWindowChange)
+  stopWidthResize()
+  stopHeightResize()
 })
 </script>
 
@@ -70,11 +242,19 @@ onBeforeUnmount(() => {
   <transition name="flyout-fade">
     <aside
       v-if="open"
-      ref="flyoutEl"
       class="flyout-shell"
+      :class="[`flyout-shell--${side}`]"
       :style="styleVars"
     >
       <div class="flyout-panel">
+        <button
+          class="flyout-outer-resize-handle"
+          data-testid="flyout-outer-resize-handle"
+          type="button"
+          aria-label="Resize flyout width"
+          @mousedown.stop="startWidthResize"
+        />
+
         <div class="flyout-header">
           <div class="flyout-row flyout-row-top">
             <h2 class="flyout-title">{{ title }}</h2>
@@ -90,6 +270,14 @@ onBeforeUnmount(() => {
             <slot />
           </div>
         </div>
+
+        <button
+          class="flyout-height-resize-handle"
+          data-testid="flyout-height-resize-handle"
+          type="button"
+          aria-label="Resize flyout height"
+          @mousedown.stop="startHeightResize"
+        />
       </div>
     </aside>
   </transition>
@@ -98,12 +286,13 @@ onBeforeUnmount(() => {
 <style scoped>
 .flyout-shell {
   position: absolute;
-  left: 8px;
-  width: 350px;
-  z-index: 10;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
   pointer-events: auto;
   background: transparent;
   border: none;
+  max-height: calc(100% - 8px);
 }
 
 .flyout-shell::before,
@@ -113,15 +302,18 @@ onBeforeUnmount(() => {
 
 .flyout-panel {
   position: relative;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 8px;
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
   background: var(--bg-gradient);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-radius: 16px;
-  padding: 6px 6px 6px 6px;
-  flex: 1;
+  padding: 6px;
 }
 
 .flyout-panel::before {
@@ -192,7 +384,7 @@ onBeforeUnmount(() => {
 .flyout-card {
   position: relative;
   z-index: 2;
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -200,9 +392,9 @@ onBeforeUnmount(() => {
   overflow: hidden;
   border-radius: 8px;
   background: linear-gradient(
-      180deg,
-      rgba(11, 19, 32, 0.72) 0%,
-      rgba(7, 14, 24, 0.82) 70%
+    180deg,
+    rgba(11, 19, 32, 0.72) 0%,
+    rgba(7, 14, 24, 0.82) 70%
   );
   border: 1px solid var(--wall-bg);
   box-shadow:
@@ -222,6 +414,44 @@ onBeforeUnmount(() => {
   color: var(--wall-text);
   border-radius: 6px;
   z-index: 3;
+}
+
+.flyout-outer-resize-handle,
+.flyout-height-resize-handle {
+  position: absolute;
+  z-index: 60;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.flyout-outer-resize-handle {
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: pan-y;
+}
+
+.flyout-shell--left .flyout-outer-resize-handle {
+  left: 0;
+}
+
+.flyout-shell--right .flyout-outer-resize-handle {
+  right: 0;
+}
+
+.flyout-height-resize-handle {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 8px;
+  cursor: row-resize;
+  touch-action: pan-x;
 }
 
 .flyout-fade-enter-active,

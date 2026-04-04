@@ -1,6 +1,7 @@
 import { ref } from 'vue'
+import type { FlyoutId } from '@/lib/flyoutLayout'
 
-export type FlyoutId = 'zone2' | 'zone3' | 'zone4' | 'counter'
+export type { FlyoutId } from '@/lib/flyoutLayout'
 
 export function useFlyouts() {
   const activeFlyout = ref<FlyoutId | null>(null)

@@ -4,16 +4,21 @@ import type {
   PreferenceDefinition,
   PreferenceValidationRule,
   PreferenceValue,
+  PreferenceSnapshot,
 } from '@/types/preference.types'
+import { preferenceRegistry } from '@/data/preferences/preference.registry'
 
-function matchesType(controlType: PreferenceDefinition['controlType'], value: PreferenceValue): boolean {
+function matchesType(
+  controlType: PreferenceDefinition['controlType'],
+  value: PreferenceValue,
+): boolean {
   switch (controlType) {
     case 'toggle':
       return typeof value === 'boolean'
 
     case 'slider':
     case 'number':
-      return typeof value === 'number'
+      return typeof value === 'number' && Number.isFinite(value)
 
     case 'text':
     case 'single-select':
@@ -75,7 +80,9 @@ export function sanitizePreferenceValue(
   }
 
   if (definition.controlType === 'slider' || definition.controlType === 'number') {
-    if (typeof value !== 'number') return definition.defaultValue
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      return definition.defaultValue
+    }
 
     const min = definition.ui?.min
     const max = definition.ui?.max
@@ -88,7 +95,8 @@ export function sanitizePreferenceValue(
   }
 
   if (
-    (definition.controlType === 'single-select' || definition.controlType === 'segmented-choice') &&
+    (definition.controlType === 'single-select' ||
+      definition.controlType === 'segmented-choice') &&
     typeof value === 'string' &&
     definition.ui?.options?.length
   ) {
@@ -96,11 +104,16 @@ export function sanitizePreferenceValue(
     return allowed.includes(value) ? value : definition.defaultValue
   }
 
-  if (
-    (definition.controlType === 'multiselect' || definition.controlType === 'list-manager') &&
-    Array.isArray(value)
-  ) {
-    return value.filter((item) => typeof item === 'string')
+  if (definition.controlType === 'multiselect' && Array.isArray(value)) {
+    const allowed = definition.ui?.options?.map((option) => option.value) ?? []
+    return value.filter(
+      (item): item is string =>
+        typeof item === 'string' && (allowed.length === 0 || allowed.includes(item)),
+    )
+  }
+
+  if (definition.controlType === 'list-manager' && Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === 'string')
   }
 
   if (definition.validation?.length && !validatePreferenceValue(definition, value)) {
@@ -108,4 +121,23 @@ export function sanitizePreferenceValue(
   }
 
   return value
+}
+
+export function sanitizeImportedPreferenceValues(
+  snapshot: PreferenceSnapshot | null,
+): Record<string, PreferenceValue> | null {
+  if (!snapshot?.values || typeof snapshot.values !== 'object') {
+    return null
+  }
+
+  const sanitized: Record<string, PreferenceValue> = {}
+
+  for (const setting of preferenceRegistry.settings) {
+    const rawValue = snapshot.values[setting.id]
+    if (rawValue === undefined) continue
+
+    sanitized[setting.id] = sanitizePreferenceValue(setting, rawValue)
+  }
+
+  return sanitized
 }

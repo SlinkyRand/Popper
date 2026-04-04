@@ -3,24 +3,70 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import App from '../App.vue'
 import { useGameStore } from '../stores/gameStore'
+import { usePreferenceStore } from '../stores/preferenceStore'
+import {
+  FLYOUT_HEIGHT_DEFAULT,
+  FLYOUT_WIDTH_DEFAULT,
+  MAIN_APP_WIDTH_DEFAULT,
+} from '../data/preferences/preference.constants'
+import { check } from '@tauri-apps/plugin-updater'
+import { wallpaperPaletteState } from '../lib/wallpaperPalette'
+
+vi.mock('@tauri-apps/plugin-updater', () => ({
+  check: vi.fn().mockResolvedValue(null),
+}))
+
+vi.mock('@tauri-apps/plugin-process', () => ({
+  relaunch: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('../lib/wallpaperPalette', async () => {
+  const { ref, computed } = await import('vue')
+
+  const palette = ref([])
+  const wallpaperUrl = ref('')
+  const isLoading = ref(false)
+  const isFallback = ref(false)
+  const isReady = ref(true)
+
+  return {
+    wallpaperPaletteState: {
+      palette,
+      wallpaperUrl,
+      isLoading,
+      isFallback,
+      isReady,
+      hexes: computed(() => []),
+      roles: computed(() => ({
+        background: '#101010',
+        surface: '#1b1b1b',
+        accent: '#ff1744',
+        accent2: '#7c4dff',
+        accentSoft: 'rgba(255, 23, 68, 0.18)',
+        highlight: '#ffd600',
+        text: '#ffffff',
+      })),
+      refresh: vi.fn().mockResolvedValue(undefined),
+    },
+  }
+})
 
 describe('App.vue', () => {
   let pinia
 
   beforeEach(() => {
+    vi.clearAllMocks()
+    localStorage.clear()
     pinia = createPinia()
     setActivePinia(pinia)
-    // Reset mock calls
-    globalThis.__tauriMockWindow.setShadow.mockClear()
+    vi.mocked(check).mockResolvedValue(null)
+    vi.mocked(wallpaperPaletteState.refresh).mockResolvedValue(undefined)
   })
 
   function mountApp() {
     return mount(App, {
       global: {
         plugins: [pinia],
-        stubs: {
-          img: { template: '<span class="stub-img"></span>' }
-        }
       },
     })
   }
@@ -29,15 +75,6 @@ describe('App.vue', () => {
   it('mounts without runtime errors', () => {
     const wrapper = mountApp()
     expect(wrapper.vm).toBeTruthy()
-  })
-
-  it('calls setShadow(true) on mount', async () => {
-    mountApp()
-    // onMounted runs asynchronously, flush
-    await vi.dynamicImportSettled()
-    // Wait a tick for the async onMounted to resolve
-    await new Promise((r) => setTimeout(r, 0))
-    expect(globalThis.__tauriMockWindow.setShadow).toHaveBeenCalledWith(true)
   })
 
   // ─── UI renders from store state ─────────────────────────────
@@ -174,6 +211,111 @@ describe('App.vue', () => {
     const closeBtn = wrapper.find('.win-btn.close')
     await closeBtn.trigger('click')
     expect(globalThis.__tauriMockWindow.close).toHaveBeenCalled()
+  })
+
+  it('persists main app width changes from the shared divider', async () => {
+    const wrapper = mountApp()
+    const store = usePreferenceStore()
+
+    await wrapper.find('.win-btn[aria-label="Preferences"]').trigger('click')
+    await wrapper.vm.$nextTick()
+
+    const handle = wrapper.find('[data-testid="app-resize-handle"]')
+    expect(handle.exists()).toBe(true)
+
+    await handle.trigger('mousedown', { clientX: 800 })
+    window.dispatchEvent(new MouseEvent('mousemove', { clientX: 760 }))
+    window.dispatchEvent(new MouseEvent('mouseup'))
+
+    expect(store.get('display.mainAppWidth')).toBe(MAIN_APP_WIDTH_DEFAULT + 40)
+
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    const savedSnapshot = JSON.parse(localStorage.getItem('popper.preferences'))
+    expect(savedSnapshot.values['display.mainAppWidth']).toBe(MAIN_APP_WIDTH_DEFAULT + 40)
+  })
+
+  it('persists flyout width and height changes from the flyout border handles', async () => {
+    const wrapper = mountApp()
+    const store = usePreferenceStore()
+
+    await wrapper.find('.win-btn[aria-label="Preferences"]').trigger('click')
+    await wrapper.vm.$nextTick()
+
+    const widthHandle = wrapper.find('[data-testid="flyout-outer-resize-handle"]')
+    const heightHandle = wrapper.find('[data-testid="flyout-height-resize-handle"]')
+
+    expect(widthHandle.exists()).toBe(true)
+    expect(heightHandle.exists()).toBe(true)
+
+    await widthHandle.trigger('mousedown', { clientX: 600 })
+    window.dispatchEvent(new MouseEvent('mousemove', { clientX: 560 }))
+    window.dispatchEvent(new MouseEvent('mouseup'))
+
+    await heightHandle.trigger('mousedown', { clientY: 300 })
+    window.dispatchEvent(new MouseEvent('mousemove', { clientY: 340 }))
+    window.dispatchEvent(new MouseEvent('mouseup'))
+
+    expect(store.get('display.flyoutWidth.preferences')).toBe(FLYOUT_WIDTH_DEFAULT + 40)
+    expect(store.get('display.flyoutHeight.preferences')).toBe(FLYOUT_HEIGHT_DEFAULT + 40)
+
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    const savedSnapshot = JSON.parse(localStorage.getItem('popper.preferences'))
+    expect(savedSnapshot.values['display.flyoutWidth.preferences']).toBe(FLYOUT_WIDTH_DEFAULT + 40)
+    expect(savedSnapshot.values['display.flyoutHeight.preferences']).toBe(FLYOUT_HEIGHT_DEFAULT + 40)
+  })
+
+  it('resizes correctly when snapped left and the flyout is forced to the right side', async () => {
+    const store = usePreferenceStore()
+    store.batchSet(
+      {
+        'display.screenAnchor': 'left',
+        'display.snapToScreenEdge': true,
+        'display.flyoutSide': 'left',
+      },
+      'display',
+    )
+
+    const wrapper = mountApp()
+
+    await wrapper.find('.win-btn[aria-label="Preferences"]').trigger('click')
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('.window-root').classes()).toContain('anchor-left')
+    expect(wrapper.find('.window-root').classes()).toContain('flyout-on-right')
+
+    const mainHandle = wrapper.find('[data-testid="app-resize-handle"]')
+    const widthHandle = wrapper.find('[data-testid="flyout-outer-resize-handle"]')
+
+    await mainHandle.trigger('mousedown', { clientX: 600 })
+    window.dispatchEvent(new MouseEvent('mousemove', { clientX: 640 }))
+    window.dispatchEvent(new MouseEvent('mouseup'))
+
+    await widthHandle.trigger('mousedown', { clientX: 700 })
+    window.dispatchEvent(new MouseEvent('mousemove', { clientX: 740 }))
+    window.dispatchEvent(new MouseEvent('mouseup'))
+
+    expect(store.get('display.mainAppWidth')).toBe(MAIN_APP_WIDTH_DEFAULT + 40)
+    expect(store.get('display.flyoutWidth.preferences')).toBe(FLYOUT_WIDTH_DEFAULT + 40)
+  })
+
+  it('only honors the user-selected flyout side when snap-to-edge is off', async () => {
+    const store = usePreferenceStore()
+    store.batchSet(
+      {
+        'display.screenAnchor': 'left',
+        'display.snapToScreenEdge': false,
+        'display.flyoutSide': 'left',
+      },
+      'display',
+    )
+
+    const wrapper = mountApp()
+    await wrapper.find('.win-btn[aria-label="Preferences"]').trigger('click')
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('.window-root').classes()).toContain('anchor-left')
+    expect(wrapper.find('.window-root').classes()).toContain('flyout-on-left')
+    expect(wrapper.find('.window-root').classes()).not.toContain('flyout-on-right')
   })
 
   it('calls startDragging when mousedown occurs on a drag region', async () => {

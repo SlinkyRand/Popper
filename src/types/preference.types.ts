@@ -68,6 +68,7 @@ export interface PreferenceUiMeta {
   confirmRequired?: boolean
   danger?: boolean
   helpText?: string
+  readOnly?: boolean
 }
 
 export interface PreferenceDefinition {

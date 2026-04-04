@@ -1,7 +1,79 @@
 // Defines every individual preference entry.
 
 import type { PreferenceRegistry } from '@/types/preference.types'
+import {
+  FLYOUT_HEIGHT_DEFAULT,
+  FLYOUT_HEIGHT_MAX,
+  FLYOUT_HEIGHT_MIN,
+  FLYOUT_WIDTH_DEFAULT,
+  FLYOUT_WIDTH_MAX,
+  FLYOUT_WIDTH_MIN,
+  MAIN_APP_WIDTH_DEFAULT,
+  MAIN_APP_WIDTH_MAX,
+  MAIN_APP_WIDTH_MIN,
+} from './preference.constants'
 import { preferenceTabs } from './preference.tabs'
+import {
+  flyoutIds,
+  getFlyoutHeightPreferenceId,
+  getFlyoutWidthPreferenceId,
+} from '@/lib/flyoutLayout'
+
+const flyoutLabelById = {
+  zone2: 'Section 2',
+  zone3: 'Section 3',
+  zone4: 'Section 4',
+  counter: 'Counter',
+  preferences: 'Preferences',
+} satisfies Record<(typeof flyoutIds)[number], string>
+
+const flyoutWidthSettings = flyoutIds.map((flyoutId) => ({
+  id: getFlyoutWidthPreferenceId(flyoutId),
+  version: 1,
+  tab: 'display' as const,
+  section: 'layout',
+  label: `${flyoutLabelById[flyoutId]} flyout width`,
+  description: `Preferred width for the ${flyoutLabelById[flyoutId]} flyout.`,
+  controlType: 'slider' as const,
+  defaultValue: FLYOUT_WIDTH_DEFAULT,
+  syncPolicy: 'device-only' as const,
+  privacyModeDefault: true,
+  conflictStrategy: 'prefer-local' as const,
+  validation: [
+    { type: 'min' as const, value: FLYOUT_WIDTH_MIN, message: `Must be at least ${FLYOUT_WIDTH_MIN}.` },
+    { type: 'max' as const, value: FLYOUT_WIDTH_MAX, message: `Must be ${FLYOUT_WIDTH_MAX} or less.` },
+  ],
+  ui: {
+    min: FLYOUT_WIDTH_MIN,
+    max: FLYOUT_WIDTH_MAX,
+    step: 4,
+    unit: 'px',
+  },
+}))
+
+const flyoutHeightSettings = flyoutIds.map((flyoutId) => ({
+  id: getFlyoutHeightPreferenceId(flyoutId),
+  version: 1,
+  tab: 'display' as const,
+  section: 'layout',
+  label: `${flyoutLabelById[flyoutId]} flyout height`,
+  description: `Preferred height for the ${flyoutLabelById[flyoutId]} flyout.`,
+  controlType: 'slider' as const,
+  defaultValue: FLYOUT_HEIGHT_DEFAULT,
+  syncPolicy: 'device-only' as const,
+  privacyModeDefault: true,
+  conflictStrategy: 'prefer-local' as const,
+  validation: [
+    { type: 'min' as const, value: FLYOUT_HEIGHT_MIN, message: `Must be at least ${FLYOUT_HEIGHT_MIN}.` },
+    { type: 'max' as const, value: FLYOUT_HEIGHT_MAX, message: `Must be ${FLYOUT_HEIGHT_MAX} or less.` },
+  ],
+  ui: {
+    min: FLYOUT_HEIGHT_MIN,
+    max: FLYOUT_HEIGHT_MAX,
+    step: 4,
+    unit: 'px',
+  },
+}))
 
 export const preferenceRegistry: PreferenceRegistry = {
   tabs: preferenceTabs,
@@ -348,6 +420,26 @@ export const preferenceRegistry: PreferenceRegistry = {
       conflictStrategy: 'prefer-local',
     },
     {
+      id: 'display.flyoutSide',
+      version: 1,
+      tab: 'display',
+      section: 'positioning',
+      label: 'Flyout side',
+      description: 'Choose which side flyouts prefer when the app is not snapped to a screen edge.',
+      controlType: 'single-select',
+      defaultValue: 'auto',
+      syncPolicy: 'device-only',
+      privacyModeDefault: true,
+      conflictStrategy: 'prefer-local',
+      ui: {
+        options: [
+          { value: 'auto', label: 'Automatic' },
+          { value: 'left', label: 'Left of app' },
+          { value: 'right', label: 'Right of app' },
+        ],
+      },
+    },
+    {
       id: 'display.snapToScreenEdge',
       version: 1,
       tab: 'display',
@@ -571,28 +663,53 @@ export const preferenceRegistry: PreferenceRegistry = {
     // Display / Layout
     // --------------------
     {
-      id: 'display.flyoutWidth',
+      id: 'display.mainAppWidth',
       version: 1,
       tab: 'display',
       section: 'layout',
-      label: 'Flyout width',
-      description: 'Preferred width for utility flyouts.',
+      label: 'Main app width',
+      description: 'Preferred width for the main app surface when flyouts are open.',
       controlType: 'slider',
-      defaultValue: 360,
+      defaultValue: MAIN_APP_WIDTH_DEFAULT,
       syncPolicy: 'device-only',
       privacyModeDefault: true,
       conflictStrategy: 'prefer-local',
       validation: [
-        { type: 'min', value: 280, message: 'Must be at least 280.' },
-        { type: 'max', value: 520, message: 'Must be 520 or less.' },
+        { type: 'min', value: MAIN_APP_WIDTH_MIN, message: 'Must be at least 720.' },
+        { type: 'max', value: MAIN_APP_WIDTH_MAX, message: 'Must be 1440 or less.' },
       ],
       ui: {
-        min: 280,
-        max: 520,
+        min: MAIN_APP_WIDTH_MIN,
+        max: MAIN_APP_WIDTH_MAX,
+        step: 8,
+        unit: 'px',
+      },
+    },
+    {
+      id: 'display.flyoutWidth',
+      version: 1,
+      tab: 'display',
+      section: 'layout',
+      label: 'Default flyout width',
+      description: 'Fallback width for utility flyouts before they are resized individually.',
+      controlType: 'slider',
+      defaultValue: FLYOUT_WIDTH_DEFAULT,
+      syncPolicy: 'device-only',
+      privacyModeDefault: true,
+      conflictStrategy: 'prefer-local',
+      validation: [
+        { type: 'min', value: FLYOUT_WIDTH_MIN, message: 'Must be at least 280.' },
+        { type: 'max', value: FLYOUT_WIDTH_MAX, message: 'Must be 520 or less.' },
+      ],
+      ui: {
+        min: FLYOUT_WIDTH_MIN,
+        max: FLYOUT_WIDTH_MAX,
         step: 4,
         unit: 'px',
       },
     },
+    ...flyoutWidthSettings,
+    ...flyoutHeightSettings,
     {
       id: 'display.sidebarCollapsedByDefault',
       version: 1,
