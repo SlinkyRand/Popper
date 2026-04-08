@@ -104,9 +104,9 @@ function moveItem(index: number, direction: -1 | 1) {
 .list-manager__input,
 .list-manager__add,
 .list-manager__actions button {
-  border: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--preference-surface-background, var(--app-titlebar-background));
   color: inherit;
 }
 
@@ -137,7 +137,8 @@ function moveItem(index: number, direction: -1 | 1) {
   align-items: center;
   padding: 0.7rem 0.8rem;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--preference-surface-background, var(--app-titlebar-background));
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .list-manager__text {

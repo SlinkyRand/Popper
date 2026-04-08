@@ -3,14 +3,14 @@
 import type { PreferenceRegistry } from '@/types/preference.types'
 import {
   FLYOUT_HEIGHT_DEFAULT,
-  FLYOUT_HEIGHT_MAX,
   FLYOUT_HEIGHT_MIN,
   FLYOUT_WIDTH_DEFAULT,
-  FLYOUT_WIDTH_MAX,
   FLYOUT_WIDTH_MIN,
   MAIN_APP_WIDTH_DEFAULT,
-  MAIN_APP_WIDTH_MAX,
   MAIN_APP_WIDTH_MIN,
+  getMainAppWidthMax,
+  getFlyoutWidthMax,
+  getFlyoutHeightMax,
 } from './preference.constants'
 import { preferenceTabs } from './preference.tabs'
 import {
@@ -41,11 +41,10 @@ const flyoutWidthSettings = flyoutIds.map((flyoutId) => ({
   conflictStrategy: 'prefer-local' as const,
   validation: [
     { type: 'min' as const, value: FLYOUT_WIDTH_MIN, message: `Must be at least ${FLYOUT_WIDTH_MIN}.` },
-    { type: 'max' as const, value: FLYOUT_WIDTH_MAX, message: `Must be ${FLYOUT_WIDTH_MAX} or less.` },
   ],
   ui: {
     min: FLYOUT_WIDTH_MIN,
-    max: FLYOUT_WIDTH_MAX,
+    get max() { return getFlyoutWidthMax() },
     step: 4,
     unit: 'px',
   },
@@ -65,11 +64,10 @@ const flyoutHeightSettings = flyoutIds.map((flyoutId) => ({
   conflictStrategy: 'prefer-local' as const,
   validation: [
     { type: 'min' as const, value: FLYOUT_HEIGHT_MIN, message: `Must be at least ${FLYOUT_HEIGHT_MIN}.` },
-    { type: 'max' as const, value: FLYOUT_HEIGHT_MAX, message: `Must be ${FLYOUT_HEIGHT_MAX} or less.` },
   ],
   ui: {
     min: FLYOUT_HEIGHT_MIN,
-    max: FLYOUT_HEIGHT_MAX,
+    get max() { return getFlyoutHeightMax() },
     step: 4,
     unit: 'px',
   },
@@ -675,12 +673,11 @@ export const preferenceRegistry: PreferenceRegistry = {
       privacyModeDefault: true,
       conflictStrategy: 'prefer-local',
       validation: [
-        { type: 'min', value: MAIN_APP_WIDTH_MIN, message: 'Must be at least 720.' },
-        { type: 'max', value: MAIN_APP_WIDTH_MAX, message: 'Must be 1440 or less.' },
+        { type: 'min', value: MAIN_APP_WIDTH_MIN, message: `Must be at least ${MAIN_APP_WIDTH_MIN}.` },
       ],
       ui: {
         min: MAIN_APP_WIDTH_MIN,
-        max: MAIN_APP_WIDTH_MAX,
+        get max() { return getMainAppWidthMax() },
         step: 8,
         unit: 'px',
       },
@@ -698,12 +695,11 @@ export const preferenceRegistry: PreferenceRegistry = {
       privacyModeDefault: true,
       conflictStrategy: 'prefer-local',
       validation: [
-        { type: 'min', value: FLYOUT_WIDTH_MIN, message: 'Must be at least 280.' },
-        { type: 'max', value: FLYOUT_WIDTH_MAX, message: 'Must be 520 or less.' },
+        { type: 'min', value: FLYOUT_WIDTH_MIN, message: `Must be at least ${FLYOUT_WIDTH_MIN}.` },
       ],
       ui: {
         min: FLYOUT_WIDTH_MIN,
-        max: FLYOUT_WIDTH_MAX,
+        get max() { return getFlyoutWidthMax() },
         step: 4,
         unit: 'px',
       },

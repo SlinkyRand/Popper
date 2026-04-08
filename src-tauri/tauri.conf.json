@@ -15,7 +15,7 @@
         "title": "Popper Game",
         "width": 600,
         "height": 900,
-        "resizable": false,
+        "resizable": true,
         "fullscreen": false,
         "decorations": false,
         "transparent": true

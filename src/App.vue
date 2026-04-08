@@ -16,10 +16,13 @@ import { usePreferenceStore } from '@/stores/preferenceStore'
 import { useAppliedPreferences } from './composables/preferences/useAppliedPreferences'
 import {
   FLYOUT_WIDTH_DEFAULT,
-  FLYOUT_WIDTH_MAX,
   FLYOUT_WIDTH_MIN,
-  MAIN_APP_WIDTH_MAX,
   MAIN_APP_WIDTH_MIN,
+  getMainAppWidthMax,
+  getFlyoutWidthMax,
+  getFlyoutHeightMax,
+  setDisplayBoundsOverride,
+  clearDisplayBoundsOverride,
 } from '@/data/preferences/preference.constants'
 import {
   getFlyoutWidthPreferenceId,
@@ -57,6 +60,133 @@ const sparkleBurstKey = ref(0)
 const showSparkles = ref(false)
 const isLayoutReady = ref(false)
 
+// Zone height resize state (zones 2–5, stored as flex-grow ratios)
+const ZONE_HEIGHT_PREF_PREFIX = 'display.zoneHeight.'
+const ZONE_HEIGHT_MIN_PX = 80
+const zoneHeights = ref<Record<string, number>>({
+  zone2: 1.0,
+  zone3: 0.72,
+  zone4: 0.72,
+  zone5: 0.72,
+})
+
+function loadZoneHeights() {
+  for (const zone of ['zone2', 'zone3', 'zone4', 'zone5']) {
+    const saved = preferenceStore.get(`${ZONE_HEIGHT_PREF_PREFIX}${zone}`)
+    if (typeof saved === 'number' && saved > 0) {
+      zoneHeights.value[zone] = saved
+    }
+  }
+}
+
+let zoneResizeActiveHandle: string | null = null
+let zoneResizeStartY = 0
+let zoneResizeTopZone = ''
+let zoneResizeBottomZone = ''
+let zoneResizeTopStart = 0
+let zoneResizeBottomStart = 0
+let zoneResizeNextTop = 0
+let zoneResizeNextBottom = 0
+let zoneGhostTopEl: HTMLElement | null = null
+let zoneGhostBottomEl: HTMLElement | null = null
+let zoneGhostTopHeight = 0
+let zoneGhostBottomHeight = 0
+let zoneGhostTopY = 0
+let zoneGhostBottomY = 0
+
+function getZoneEl(zoneName: string): HTMLElement | null {
+  const refs: Record<string, ReturnType<typeof ref>> = {
+    zone2: zone2Ref,
+    zone3: zone3Ref,
+    zone4: zone4Ref,
+  }
+  // zone5 has no ref, find by class
+  if (zoneName === 'zone5') {
+    return windowRootRef.value?.querySelector('.zone-5') as HTMLElement | null
+  }
+  return refs[zoneName]?.value ?? null
+}
+
+function startZoneResize(topZone: string, bottomZone: string, event: MouseEvent) {
+  zoneResizeActiveHandle = `${topZone}-${bottomZone}`
+  zoneResizeStartY = event.clientY
+  zoneResizeTopZone = topZone
+  zoneResizeBottomZone = bottomZone
+  zoneResizeTopStart = zoneHeights.value[topZone]
+  zoneResizeBottomStart = zoneHeights.value[bottomZone]
+  zoneResizeNextTop = zoneResizeTopStart
+  zoneResizeNextBottom = zoneResizeBottomStart
+
+  // Capture initial pixel heights for ghost positioning
+  zoneGhostTopEl = getZoneEl(topZone)
+  zoneGhostBottomEl = getZoneEl(bottomZone)
+  if (zoneGhostTopEl && zoneGhostBottomEl) {
+    const topRect = zoneGhostTopEl.getBoundingClientRect()
+    const bottomRect = zoneGhostBottomEl.getBoundingClientRect()
+    zoneGhostTopHeight = topRect.height
+    zoneGhostBottomHeight = bottomRect.height
+    zoneGhostTopY = topRect.top
+    zoneGhostBottomY = bottomRect.top
+    showGhost({ x: topRect.left, y: topRect.top, width: topRect.width, height: topRect.height })
+  }
+
+  window.addEventListener('mousemove', onZoneResize)
+  window.addEventListener('mouseup', stopZoneResize)
+  event.preventDefault()
+  event.stopPropagation()
+}
+
+function onZoneResize(event: MouseEvent) {
+  if (!zoneResizeActiveHandle) return
+
+  const delta = event.clientY - zoneResizeStartY
+  const ratioDelta = delta / 200
+
+  zoneResizeNextTop = Math.max(ZONE_HEIGHT_MIN_PX / 200, zoneResizeTopStart + ratioDelta)
+  zoneResizeNextBottom = Math.max(ZONE_HEIGHT_MIN_PX / 200, zoneResizeBottomStart - ratioDelta)
+
+  // Move only the ghost — compute new pixel height proportionally
+  if (zoneGhostTopEl && ghostRef.value) {
+    const topRect = zoneGhostTopEl.getBoundingClientRect()
+    const newTopHeight = zoneGhostTopHeight + delta
+    showGhost({
+      x: topRect.left,
+      y: zoneGhostTopY,
+      width: topRect.width,
+      height: Math.max(ZONE_HEIGHT_MIN_PX, newTopHeight),
+    })
+  }
+}
+
+function stopZoneResize() {
+  if (!zoneResizeActiveHandle) return
+  window.removeEventListener('mousemove', onZoneResize)
+  window.removeEventListener('mouseup', stopZoneResize)
+
+  hideGhost()
+
+  // Single reactive update → one re-render
+  zoneHeights.value = {
+    ...zoneHeights.value,
+    [zoneResizeTopZone]: zoneResizeNextTop,
+    [zoneResizeBottomZone]: zoneResizeNextBottom,
+  }
+
+  preferenceStore.set(`${ZONE_HEIGHT_PREF_PREFIX}${zoneResizeTopZone}`, zoneResizeNextTop)
+  preferenceStore.set(`${ZONE_HEIGHT_PREF_PREFIX}${zoneResizeBottomZone}`, zoneResizeNextBottom)
+
+  zoneResizeActiveHandle = null
+  zoneGhostTopEl = null
+  zoneGhostBottomEl = null
+}
+
+const layoutShellStyle = computed(() => ({
+  '--zone2-grow': zoneHeights.value.zone2,
+  '--zone3-grow': zoneHeights.value.zone3,
+  '--zone4-grow': zoneHeights.value.zone4,
+  '--zone5-grow': zoneHeights.value.zone5,
+}))
+
 const windowRootRef = ref<HTMLElement | null>(null)
 const preferencesButtonRef = ref<HTMLElement | null>(null)
 const zone2Ref = ref<HTMLElement | null>(null)
@@ -86,19 +216,23 @@ const flyoutAnchors: Record<FlyoutId, typeof zone2Ref> = {
 }
 
 function clampFlyoutWidth(value: number) {
-  return Math.min(FLYOUT_WIDTH_MAX, Math.max(FLYOUT_WIDTH_MIN, value))
+  return Math.min(getFlyoutWidthMax(), Math.max(FLYOUT_WIDTH_MIN, value))
+}
+
+function getMainAppWidthCap() {
+  if (!workAreaBounds.value) {
+    return getMainAppWidthMax()
+  }
+
+  return Math.max(MAIN_APP_WIDTH_MIN, Math.floor(workAreaBounds.value.width - activeFlyoutOffset.value))
 }
 
 function clampMainAppWidth(value: number) {
-  return Math.min(MAIN_APP_WIDTH_MAX, Math.max(MAIN_APP_WIDTH_MIN, value))
+  return Math.min(getMainAppWidthCap(), Math.max(MAIN_APP_WIDTH_MIN, value))
 }
 
 function clampValue(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
-}
-
-function snapWidth(value: number, step = 24) {
-  return Math.round(value / step) * step
 }
 
 function getSavedFlyoutWidth(id: FlyoutId) {
@@ -174,10 +308,49 @@ const windowRootStyle = computed(() => ({
 const showMainResizeHandle = computed(() => true)
 const hasActiveFlyout = computed(() => activeFlyout.value !== null)
 const isFlyoutOnLeft = computed(() => hasActiveFlyout.value && activeFlyoutSide.value === 'left')
+const workAreaBounds = ref<WorkAreaRect | null>(null)
 
 let mainResizeStartX = 0
 let mainResizeStartWidth = 0
+let mainResizeCurrent = 0
 let isMainResizing = false
+
+// Fixed anchors captured at drag-start so the ghost expands from the correct edge
+let ghostFixedLeft = 0    // used when growing rightward (left edge stays fixed)
+let ghostFixedRight = 0   // used when growing leftward (right edge stays fixed)
+let ghostFixedTop = 0
+let ghostFixedHeight = 0
+
+const ghostRef = ref<HTMLElement | null>(null)
+
+function showGhostAnchored(width: number, growDirection: 'left' | 'right') {
+  const el = ghostRef.value
+  if (!el) return
+  const x = growDirection === 'right'
+    ? ghostFixedLeft                  // left edge fixed, grow rightward
+    : ghostFixedRight - width         // right edge fixed, grow leftward
+  el.style.left = `${x}px`
+  el.style.top = `${ghostFixedTop}px`
+  el.style.width = `${width}px`
+  el.style.height = `${ghostFixedHeight}px`
+  el.style.display = 'block'
+}
+
+function showGhostFromRect(rect: { x: number; y: number; width: number; height: number }) {
+  const el = ghostRef.value
+  if (!el) return
+  el.style.left = `${rect.x}px`
+  el.style.top = `${rect.y}px`
+  el.style.width = `${rect.width}px`
+  el.style.height = `${rect.height}px`
+  el.style.display = 'block'
+}
+
+function hideGhost() {
+  const el = ghostRef.value
+  if (!el) return
+  el.style.display = 'none'
+}
 
 let resizeTimeout: number | null = null
 let unlockWorkAreaTimeout: number | null = null
@@ -190,17 +363,29 @@ let lastWindowY: number | null = null
 
 async function readCurrentWorkArea(): Promise<WorkAreaRect | null> {
   const monitor = await currentMonitor()
-  if (!monitor) return null
-
-  const scale = await appWindow.scaleFactor()
-  const workArea = monitor.workArea
-
-  return {
-    x: workArea.position.x / scale,
-    y: workArea.position.y / scale,
-    width: workArea.size.width / scale,
-    height: workArea.size.height / scale,
+  if (!monitor) {
+    workAreaBounds.value = null
+    return null
   }
+
+  const scale = monitor.scaleFactor
+  const logicalSize = monitor.workArea.size.toLogical(scale)
+  const logicalPos = monitor.workArea.position.toLogical(scale)
+
+  const nextWorkArea = {
+    x: logicalPos.x,
+    y: logicalPos.y,
+    width: logicalSize.width,
+    height: logicalSize.height,
+  }
+
+  workAreaBounds.value = nextWorkArea
+  setDisplayBoundsOverride({
+    width: nextWorkArea.width,
+    height: nextWorkArea.height,
+  })
+
+  return nextWorkArea
 }
 
 async function lockWorkAreaForInteraction() {
@@ -225,12 +410,29 @@ function scheduleWorkAreaUnlock(delay = 180) {
   }, delay)
 }
 
+function getMainAppShellRect(): { x: number; y: number; width: number; height: number } | null {
+  const shell = windowRootRef.value?.querySelector('.app-shell') as HTMLElement | null
+  if (!shell) return null
+  const r = shell.getBoundingClientRect()
+  return { x: r.left, y: r.top, width: r.width, height: r.height }
+}
+
 function startMainAppResize(event: MouseEvent) {
   void lockWorkAreaForInteraction()
 
   isMainResizing = true
   mainResizeStartX = event.clientX
   mainResizeStartWidth = clampMainAppWidth(mainAppWidth.value)
+  mainResizeCurrent = mainResizeStartWidth
+
+  const rect = getMainAppShellRect()
+  if (rect) {
+    ghostFixedLeft = rect.x
+    ghostFixedRight = rect.x + rect.width
+    ghostFixedTop = rect.y
+    ghostFixedHeight = rect.height
+    showGhostFromRect(rect)
+  }
 
   window.addEventListener('mousemove', onMainAppResize)
   window.addEventListener('mouseup', stopMainAppResize)
@@ -242,21 +444,32 @@ function startMainAppResize(event: MouseEvent) {
 function onMainAppResize(event: MouseEvent) {
   if (!isMainResizing) return
 
+  // When the flyout is on the left, the resize handle is on the left edge of
+  // the app shell → dragging left makes it bigger, so the right edge is fixed.
+  // Otherwise (handle on the right), the left edge is fixed.
   const resizeSide: FlyoutSide = activeFlyout.value ? activeFlyoutSide.value : 'right'
+  const growDirection = resizeSide === 'left' ? 'left' : 'right'
 
   const delta =
     resizeSide === 'left'
       ? mainResizeStartX - event.clientX
       : event.clientX - mainResizeStartX
 
-  const next = clampMainAppWidth(snapWidth(mainResizeStartWidth + delta))
-  preferenceStore.set(MAIN_APP_WIDTH_PREFERENCE_ID, next)
+  mainResizeCurrent = clampMainAppWidth(mainResizeStartWidth + delta)
+
+  // Expand ghost from the fixed edge — no store write, no Vue re-render
+  showGhostAnchored(mainResizeCurrent, growDirection)
 }
 
 function stopMainAppResize() {
+  if (!isMainResizing) return
   isMainResizing = false
   window.removeEventListener('mousemove', onMainAppResize)
   window.removeEventListener('mouseup', stopMainAppResize)
+
+  hideGhost()
+  // Single store write → single re-render + window sync
+  preferenceStore.set(MAIN_APP_WIDTH_PREFERENCE_ID, mainResizeCurrent)
   scheduleWorkAreaUnlock()
 }
 
@@ -267,13 +480,13 @@ async function syncWindowFrame() {
     const workArea = lockedWorkArea ?? (await readCurrentWorkArea())
     if (!workArea) return
 
-    const scale = await appWindow.scaleFactor()
     const currentSize = await appWindow.innerSize()
     const currentOuterPosition = await appWindow.outerPosition()
+    const scale = await appWindow.scaleFactor()
 
-    const currentHeight = currentSize.height / scale
-    const currentX = currentOuterPosition.x / scale
-    const currentY = currentOuterPosition.y / scale
+    const currentHeight = currentSize.toLogical(scale).height
+    const currentX = currentOuterPosition.toLogical(scale).x
+    const currentY = currentOuterPosition.toLogical(scale).y
 
     const desiredWidth = Math.round(Math.min(totalWindowWidth.value, workArea.width))
     const desiredHeight = Math.round(Math.min(currentHeight, workArea.height))
@@ -347,6 +560,8 @@ async function checkForUpdatesSilently() {
   }
 }
 
+let scaleChangeUnlisten: (() => void) | null = null
+
 onMounted(async () => {
   void checkForUpdatesSilently()
 
@@ -363,10 +578,23 @@ onMounted(async () => {
     })
   }
 
+  loadZoneHeights()
   isLayoutReady.value = true
   await lockWorkAreaForInteraction()
   await syncWindowFrame()
   scheduleWorkAreaUnlock()
+
+  // Re-read work area whenever the window moves to a monitor with a different
+  // scale factor (e.g. laptop screen ↔ external display).
+  scaleChangeUnlisten = await appWindow.onScaleChanged(async () => {
+    lockedWorkArea = null
+    lastWindowWidth = null
+    lastWindowHeight = null
+    lastWindowX = null
+    lastWindowY = null
+    await readCurrentWorkArea()
+    await syncWindowFrame()
+  })
 })
 
 onBeforeUnmount(() => {
@@ -379,6 +607,15 @@ onBeforeUnmount(() => {
   if (unlockWorkAreaTimeout !== null) {
     clearTimeout(unlockWorkAreaTimeout)
   }
+
+  if (scaleChangeUnlisten) {
+    scaleChangeUnlisten()
+    scaleChangeUnlisten = null
+  }
+
+  stopZoneResize()
+  clearDisplayBoundsOverride()
+  workAreaBounds.value = null
 })
 
 async function handleMinimize() {
@@ -492,7 +729,7 @@ function handleCatButtonClick() {
         </header>
 
         <main class="content">
-          <div class="layout-shell">
+          <div class="layout-shell" :style="layoutShellStyle">
             <section class="panel-zone zone-1">
               <div class="zone-1-row zone-1-row-top">
                 <div class="title-wrap">
@@ -533,17 +770,41 @@ function handleCatButtonClick() {
               </div>
             </section>
 
+            <button
+              class="zone-resize-handle"
+              data-testid="zone-resize-handle-2-3"
+              type="button"
+              aria-label="Resize between section 2 and section 3"
+              @mousedown.stop="startZoneResize('zone2', 'zone3', $event)"
+            />
+
             <section class="panel-zone zone-3" ref="zone3Ref" @click="handleFlyoutToggle('zone3')">
               <div class="panel-card">
                 <div class="panel-card-content"></div>
               </div>
             </section>
 
+            <button
+              class="zone-resize-handle"
+              data-testid="zone-resize-handle-3-4"
+              type="button"
+              aria-label="Resize between section 3 and section 4"
+              @mousedown.stop="startZoneResize('zone3', 'zone4', $event)"
+            />
+
             <section class="panel-zone zone-4" ref="zone4Ref" @click="handleFlyoutToggle('zone4')">
               <div class="panel-card">
                 <div class="panel-card-content"></div>
               </div>
             </section>
+
+            <button
+              class="zone-resize-handle"
+              data-testid="zone-resize-handle-4-5"
+              type="button"
+              aria-label="Resize between section 4 and section 5"
+              @mousedown.stop="startZoneResize('zone4', 'zone5', $event)"
+            />
 
             <section class="panel-zone zone-5">
               <div class="panel-card">
@@ -563,6 +824,9 @@ function handleCatButtonClick() {
       aria-label="Resize main app"
       @mousedown.stop="startMainAppResize"
     />
+
+    <!-- Ghost frame: shown during any resize drag, updated via direct DOM, hidden on commit -->
+    <div ref="ghostRef" class="resize-ghost" style="display:none" aria-hidden="true" />
 
     <div class="flyout-layer">
       <FlyoutPanel
@@ -659,6 +923,9 @@ html, body, #app {
 <style scoped>
 .window-root {
   --window-radius: 16px;
+  --app-titlebar-background: rgb(5, 14, 23);
+  --preference-surface-background: var(--app-titlebar-background);
+
   --bg-gradient:
     radial-gradient(circle at -30% 40%, var(--wall-accent) 0%, transparent 45%),
     radial-gradient(circle at 100% 45%, var(--wall-accent-soft) 0%, transparent 60%),
@@ -783,6 +1050,17 @@ html, body, #app {
   overflow: hidden;
 }
 
+.resize-ghost {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
+  transition: none;
+}
+
 .app-resize-handle {
   position: absolute;
   top: 0;
@@ -829,7 +1107,7 @@ html, body, #app {
   display: flex;
   align-items: center;
   padding: 0 8px;
-  background: rgb(5, 14, 23);
+  background: var(--app-titlebar-background);
 }
 
 .traffic-lights {
@@ -939,16 +1217,45 @@ html, body, #app {
   position: relative;
   width: 100%;
   height: 100%;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows:
-    auto
-    minmax(280px, 1fr)
-    minmax(160px, 0.72fr)
-    minmax(160px, 0.72fr)
-    minmax(160px, 0.72fr);
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
   z-index: 1;
+}
+
+.zone-resize-handle {
+  flex: 0 0 8px;
+  width: 100%;
+  min-height: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: row-resize;
+  appearance: none;
+  -webkit-appearance: none;
+  user-select: none;
+  -webkit-user-select: none;
+  position: relative;
+  z-index: 5;
+  touch-action: pan-x;
+}
+
+.zone-resize-handle::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 32px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.15);
+  transition: background 160ms ease, width 160ms ease;
+}
+
+.zone-resize-handle:hover::after {
+  background: rgba(255, 255, 255, 0.35);
+  width: 48px;
 }
 
 .panel-zone {
@@ -960,8 +1267,7 @@ html, body, #app {
 }
 
 .zone-1 {
-  grid-column: 1;
-  grid-row: 1;
+  flex: 0 0 auto;
   min-height: 24px;
   padding: 6px 4px;
   display: grid;
@@ -981,26 +1287,26 @@ html, body, #app {
 }
 
 .zone-2 {
-  grid-column: 1;
-  grid-row: 2;
+  flex: var(--zone2-grow, 1) 1 0;
+  min-height: 80px;
   padding: var(--section-padding);
 }
 
 .zone-3 {
-  grid-column: 1;
-  grid-row: 3;
+  flex: var(--zone3-grow, 0.72) 1 0;
+  min-height: 80px;
   padding: var(--section-padding);
 }
 
 .zone-4 {
-  grid-column: 1;
-  grid-row: 4;
+  flex: var(--zone4-grow, 0.72) 1 0;
+  min-height: 80px;
   padding: var(--section-padding);
 }
 
 .zone-5 {
-  grid-column: 1;
-  grid-row: 5;
+  flex: var(--zone5-grow, 0.72) 1 0;
+  min-height: 80px;
   padding: var(--section-padding);
 }
 
@@ -1076,29 +1382,13 @@ html, body, #app {
 }
 
 @media (max-width: 860px) {
-  .layout-shell {
-    grid-template-columns: 1fr;
-    grid-template-rows:
-      auto
-      minmax(0, auto)
-      minmax(0, auto)
-      minmax(0, auto)
-      minmax(0, auto);
-  }
-
-  .zone-1,
   .zone-2,
   .zone-3,
   .zone-4,
   .zone-5 {
-    grid-column: 1;
+    flex: 0 0 auto;
+    min-height: 160px;
   }
-
-  .zone-1 { grid-row: 1; }
-  .zone-2 { grid-row: 2; }
-  .zone-3 { grid-row: 3; }
-  .zone-4 { grid-row: 4; }
-  .zone-5 { grid-row: 5; }
 }
 
 .popper-button {

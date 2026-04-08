@@ -3,6 +3,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import PreferenceFieldRenderer from '@/components/preferences/PreferenceFieldRenderer.vue'
+import PreferenceSectionIcon from '@/components/preferences/PreferenceSectionIcon.vue'
 import { usePreferenceControls } from '@/composables/preferences/usePreferenceControls'
 import { usePreferenceStore } from '@/stores/preferenceStore'
 
@@ -39,7 +40,10 @@ const isSaved = computed(() => Boolean(store.savedTabs[activeTabId.value]))
         class="preference-tab-section"
       >
         <header class="preference-tab-section__header">
-          <h3 class="preference-tab-section__title">{{ section.title }}</h3>
+          <div class="preference-tab-section__title-row">
+            <PreferenceSectionIcon :section-id="section.id" />
+            <h3 class="preference-tab-section__title">{{ section.title }}</h3>
+          </div>
           <p
             v-if="section.description"
             class="preference-tab-section__description"
@@ -98,6 +102,12 @@ const isSaved = computed(() => Boolean(store.savedTabs[activeTabId.value]))
   display: flex;
   flex-direction: column;
   gap: 0.8rem;
+}
+
+.preference-tab-section__title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .preference-tab-section__title {

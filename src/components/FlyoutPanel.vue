@@ -3,11 +3,15 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { usePreferenceStore } from '@/stores/preferenceStore'
 import {
   FLYOUT_HEIGHT_DEFAULT,
-  FLYOUT_HEIGHT_MAX,
   FLYOUT_HEIGHT_MIN,
   FLYOUT_WIDTH_DEFAULT,
-  FLYOUT_WIDTH_MAX,
   FLYOUT_WIDTH_MIN,
+  PREFERENCES_FLYOUT_WIDTH_DEFAULT,
+  PREFERENCES_FLYOUT_HEIGHT_DEFAULT,
+  PREFERENCES_FLYOUT_WIDTH_MIN,
+  getFlyoutHeightMax,
+  getFlyoutWidthMax,
+  getPreferencesFlyoutWidthMax,
 } from '@/data/preferences/preference.constants'
 import {
   GLOBAL_FLYOUT_WIDTH_PREFERENCE_ID,
@@ -28,37 +32,109 @@ const props = defineProps<{
 
 const preferenceStore = usePreferenceStore()
 const topPx = ref(0)
-const panelWidth = ref(FLYOUT_WIDTH_DEFAULT)
-const panelHeight = ref(FLYOUT_HEIGHT_DEFAULT)
+const panelWidth = ref(props.id === 'preferences' ? PREFERENCES_FLYOUT_WIDTH_DEFAULT : FLYOUT_WIDTH_DEFAULT)
+const panelHeight = ref(props.id === 'preferences' ? PREFERENCES_FLYOUT_HEIGHT_DEFAULT : FLYOUT_HEIGHT_DEFAULT)
 
-function clampWidth(value: number) {
-  return Math.min(FLYOUT_WIDTH_MAX, Math.max(FLYOUT_WIDTH_MIN, value))
+// Ghost element for drag-preview (updated via direct DOM, never via reactivity)
+const ghostRef = ref<HTMLElement | null>(null)
+
+// Fixed anchors captured at drag-start
+let ghostFixedLeft = 0
+let ghostFixedRight = 0
+let ghostFixedTop = 0
+let ghostFixedBottom = 0
+let ghostFixedWidth = 0
+let ghostFixedHeight = 0
+
+function initGhostAnchors(rect: { x: number; y: number; width: number; height: number }) {
+  ghostFixedLeft = rect.x
+  ghostFixedRight = rect.x + rect.width
+  ghostFixedTop = rect.y
+  ghostFixedBottom = rect.y + rect.height
+  ghostFixedWidth = rect.width
+  ghostFixedHeight = rect.height
 }
 
-function clampHeight(value: number, availableHeight = FLYOUT_HEIGHT_MAX) {
+function showFlyoutGhostWidth(width: number) {
+  const el = ghostRef.value
+  if (!el) return
+  // Flyout on left: handle is on the LEFT edge → right edge is fixed, ghost grows leftward
+  // Flyout on right: handle is on the RIGHT edge → left edge is fixed, ghost grows rightward
+  const x = props.side === 'left'
+    ? ghostFixedRight - width        // right edge fixed, grow left
+    : ghostFixedLeft                 // left edge fixed, grow right
+  el.style.left = `${x}px`
+  el.style.top = `${ghostFixedTop}px`
+  el.style.width = `${width}px`
+  el.style.height = `${ghostFixedHeight}px`
+  el.style.display = 'block'
+}
+
+function showFlyoutGhostHeight(height: number) {
+  const el = ghostRef.value
+  if (!el) return
+  // Height handle is always at the bottom → top edge fixed
+  el.style.left = `${ghostFixedLeft}px`
+  el.style.top = `${ghostFixedTop}px`
+  el.style.width = `${ghostFixedWidth}px`
+  el.style.height = `${height}px`
+  el.style.display = 'block'
+}
+
+function hideFlyoutGhost() {
+  const el = ghostRef.value
+  if (!el) return
+  el.style.display = 'none'
+}
+
+function isPreferencesFlyout() {
+  return props.id === 'preferences'
+}
+
+function getWidthMin() {
+  return isPreferencesFlyout() ? PREFERENCES_FLYOUT_WIDTH_MIN : FLYOUT_WIDTH_MIN
+}
+
+function getWidthMax() {
+  return isPreferencesFlyout() ? getPreferencesFlyoutWidthMax() : getFlyoutWidthMax()
+}
+
+function getWidthDefault() {
+  return isPreferencesFlyout() ? PREFERENCES_FLYOUT_WIDTH_DEFAULT : FLYOUT_WIDTH_DEFAULT
+}
+
+function getHeightDefault() {
+  return isPreferencesFlyout() ? PREFERENCES_FLYOUT_HEIGHT_DEFAULT : FLYOUT_HEIGHT_DEFAULT
+}
+
+function clampWidth(value: number) {
+  return Math.min(getWidthMax(), Math.max(getWidthMin(), value))
+}
+
+function clampHeight(value: number, availableHeight = getFlyoutHeightMax()) {
   const boundedMax = Math.max(
     FLYOUT_HEIGHT_MIN,
-    Math.min(FLYOUT_HEIGHT_MAX, availableHeight),
+    Math.min(getFlyoutHeightMax(), availableHeight),
   )
 
   return Math.min(boundedMax, Math.max(FLYOUT_HEIGHT_MIN, value))
 }
 
 function readPreferredWidth(): number {
-  return clampWidth(
-    Number(
-      preferenceStore.get(getFlyoutWidthPreferenceId(props.id)) ??
-        preferenceStore.get(GLOBAL_FLYOUT_WIDTH_PREFERENCE_ID) ??
-        FLYOUT_WIDTH_DEFAULT,
-    ),
-  )
+  const saved = preferenceStore.get(getFlyoutWidthPreferenceId(props.id))
+  // For the preferences flyout, don't fall back to the global flyout width
+  // since it has its own independent default that is intentionally wider.
+  const fallback = isPreferencesFlyout()
+    ? getWidthDefault()
+    : Number(preferenceStore.get(GLOBAL_FLYOUT_WIDTH_PREFERENCE_ID) ?? getWidthDefault())
+  return clampWidth(Number(saved ?? fallback))
 }
 
 function readPreferredHeight(): number {
   return clampHeight(
     Number(
       preferenceStore.get(getFlyoutHeightPreferenceId(props.id)) ??
-        FLYOUT_HEIGHT_DEFAULT,
+        getHeightDefault(),
     ),
     getAvailableHeight(),
   )
@@ -66,10 +142,10 @@ function readPreferredHeight(): number {
 
 function getAvailableHeight() {
   const container = props.containerEl
-  if (!container) return FLYOUT_HEIGHT_MAX
+  if (!container) return getFlyoutHeightMax()
 
   const containerRect = container.getBoundingClientRect()
-  if (containerRect.height <= 0) return FLYOUT_HEIGHT_MAX
+  if (containerRect.height <= 0) return getFlyoutHeightMax()
 
   return Math.max(FLYOUT_HEIGHT_MIN, containerRect.height - topPx.value - 8)
 }
@@ -85,10 +161,12 @@ const styleVars = computed(() => ({
 
 let widthResizeStartX = 0
 let widthResizeStartValue = 0
+let widthResizeCurrent = 0
 let isWidthResizing = false
 
 let heightResizeStartY = 0
 let heightResizeStartValue = 0
+let heightResizeCurrent = 0
 let isHeightResizing = false
 
 async function updatePosition() {
@@ -110,27 +188,26 @@ async function updatePosition() {
   panelHeight.value = clampHeight(panelHeight.value, getAvailableHeight())
 }
 
-function persistWidth(nextWidth: number) {
-  panelWidth.value = clampWidth(nextWidth)
-  preferenceStore.set(getFlyoutWidthPreferenceId(props.id), panelWidth.value)
-}
-
-function persistHeight(nextHeight: number) {
-  panelHeight.value = clampHeight(nextHeight, getAvailableHeight())
-  preferenceStore.set(getFlyoutHeightPreferenceId(props.id), panelHeight.value)
+function getFlyoutShellRect() {
+  // Find the aside shell element - it's the direct parent of flyout-panel
+  const el = ghostRef.value?.previousElementSibling as HTMLElement | null
+    ?? document.querySelector(`.flyout-shell`) as HTMLElement | null
+  if (!el) return null
+  const r = el.getBoundingClientRect()
+  return { x: r.left, y: r.top, width: r.width, height: r.height }
 }
 
 function startWidthResize(event: MouseEvent) {
   isWidthResizing = true
   widthResizeStartX = event.clientX
   widthResizeStartValue = panelWidth.value
+  widthResizeCurrent = panelWidth.value
 
-  console.log('[flyout-resize] start', {
-    id: props.id,
-    side: props.side,
-    width: panelWidth.value,
-    clientX: event.clientX,
-  })
+  const rect = getFlyoutShellRect()
+  if (rect) {
+    initGhostAnchors(rect)
+    showFlyoutGhostWidth(widthResizeCurrent)
+  }
 
   window.addEventListener('mousemove', onWidthResize)
   window.addEventListener('mouseup', stopWidthResize)
@@ -147,35 +224,35 @@ function onWidthResize(event: MouseEvent) {
       ? widthResizeStartX - event.clientX
       : event.clientX - widthResizeStartX
 
-  const nextWidth = widthResizeStartValue + delta
+  widthResizeCurrent = clampWidth(widthResizeStartValue + delta)
 
-  console.log('[flyout-resize] move', {
-    id: props.id,
-    side: props.side,
-    clientX: event.clientX,
-    delta,
-    startWidth: widthResizeStartValue,
-    nextWidth,
-  })
-
-  persistWidth(nextWidth)
+  // Update only the ghost from the fixed edge — no reactive update
+  showFlyoutGhostWidth(widthResizeCurrent)
 }
 
 function stopWidthResize() {
-  console.log('[flyout-resize] stop', {
-    id: props.id,
-    width: panelWidth.value,
-  })
-
+  if (!isWidthResizing) return
   isWidthResizing = false
   window.removeEventListener('mousemove', onWidthResize)
   window.removeEventListener('mouseup', stopWidthResize)
+
+  hideFlyoutGhost()
+  // Single commit → single re-render
+  panelWidth.value = widthResizeCurrent
+  preferenceStore.set(getFlyoutWidthPreferenceId(props.id), panelWidth.value)
 }
 
 function startHeightResize(event: MouseEvent) {
   isHeightResizing = true
   heightResizeStartY = event.clientY
   heightResizeStartValue = panelHeight.value
+  heightResizeCurrent = panelHeight.value
+
+  const rect = getFlyoutShellRect()
+  if (rect) {
+    initGhostAnchors(rect)
+    showFlyoutGhostHeight(heightResizeCurrent)
+  }
 
   window.addEventListener('mousemove', onHeightResize)
   window.addEventListener('mouseup', stopHeightResize)
@@ -188,13 +265,22 @@ function onHeightResize(event: MouseEvent) {
   if (!isHeightResizing) return
 
   const delta = event.clientY - heightResizeStartY
-  persistHeight(heightResizeStartValue + delta)
+  heightResizeCurrent = clampHeight(heightResizeStartValue + delta, getAvailableHeight())
+
+  // Top edge fixed, grow downward
+  showFlyoutGhostHeight(heightResizeCurrent)
 }
 
 function stopHeightResize() {
+  if (!isHeightResizing) return
   isHeightResizing = false
   window.removeEventListener('mousemove', onHeightResize)
   window.removeEventListener('mouseup', stopHeightResize)
+
+  hideFlyoutGhost()
+  // Single commit → single re-render
+  panelHeight.value = heightResizeCurrent
+  preferenceStore.set(getFlyoutHeightPreferenceId(props.id), panelHeight.value)
 }
 
 function handleWindowChange() {
@@ -245,7 +331,8 @@ onBeforeUnmount(() => {
       class="flyout-shell"
       :class="[`flyout-shell--${side}`]"
       :style="styleVars"
-    >
+    ><!-- Ghost frame: shown during flyout resize drags only -->
+      <div ref="ghostRef" class="flyout-resize-ghost" style="display:none" aria-hidden="true" />
       <div class="flyout-panel">
         <button
           class="flyout-outer-resize-handle"
@@ -452,6 +539,17 @@ onBeforeUnmount(() => {
   height: 8px;
   cursor: row-resize;
   touch-action: pan-x;
+}
+
+.flyout-resize-ghost {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
+  transition: none;
 }
 
 .flyout-fade-enter-active,

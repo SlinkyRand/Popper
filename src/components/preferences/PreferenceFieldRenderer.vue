@@ -337,7 +337,9 @@ async function handleAction() {
   gap: 0.8rem;
   padding: 1rem 1.1rem;
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--preference-surface-background, var(--app-titlebar-background));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .preference-field__header {
@@ -402,10 +404,10 @@ async function handleAction() {
 .text-input,
 .select-input {
   width: 100%;
-  border: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   padding: 0.7rem 0.85rem;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--preference-surface-background, var(--app-titlebar-background));
   color: inherit;
 }
 
@@ -417,10 +419,10 @@ async function handleAction() {
 
 .segmented-group__button,
 .action-button {
-  border: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   padding: 0.6rem 0.85rem;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--preference-surface-background, var(--app-titlebar-background));
   color: inherit;
   cursor: pointer;
 }

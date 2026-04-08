@@ -85,7 +85,9 @@ export function sanitizePreferenceValue(
     }
 
     const min = definition.ui?.min
-    const max = definition.ui?.max
+    // Read max through a getter call if present, so it reflects monitor-aware
+    // bounds that may not be known at module-load time.
+    const max = typeof definition.ui?.max === 'number' ? definition.ui.max : undefined
 
     let next = value
     if (typeof min === 'number') next = Math.max(min, next)

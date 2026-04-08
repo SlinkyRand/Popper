@@ -1,5 +1,9 @@
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,500,1,0');
+
 :root {
   --pref-flyout-width: 360px;
+  --app-titlebar-background: rgb(5, 14, 23);
+
 
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;

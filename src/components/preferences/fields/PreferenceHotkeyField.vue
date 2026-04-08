@@ -113,10 +113,10 @@ function onKeydown(event: KeyboardEvent) {
 
 .hotkey-field__capture,
 .hotkey-field__clear {
-  border: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   padding: 0.65rem 0.85rem;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--preference-surface-background, var(--app-titlebar-background));
   color: inherit;
   cursor: pointer;
 }
