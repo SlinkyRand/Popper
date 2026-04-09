@@ -1,8 +1,8 @@
 [package]
 name = "popper-game"
-version = "0.1.0"
-description = "A simple button popper game"
-authors = ["Laura"]
+version = "0.1.1"
+description = "Popper Game"
+authors = ["Laura Randant"]
 edition = "2021"
 
 [build-dependencies]
