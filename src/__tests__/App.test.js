@@ -57,6 +57,7 @@ describe('App.vue', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
+    globalThis.__tauriGlobalShortcutState.handlers.clear()
     pinia = createPinia()
     setActivePinia(pinia)
     vi.mocked(check).mockResolvedValue(null)
@@ -264,6 +265,26 @@ describe('App.vue', () => {
     expect(savedSnapshot.values['display.flyoutHeight.preferences']).toBe(FLYOUT_HEIGHT_DEFAULT + 40)
   })
 
+  it('persists zone section height changes from the section dividers', async () => {
+    const wrapper = mountApp()
+    const store = usePreferenceStore()
+
+    const handle = wrapper.find('[data-testid="zone-resize-handle-2-3"]')
+    expect(handle.exists()).toBe(true)
+
+    await handle.trigger('mousedown', { clientY: 200 })
+    window.dispatchEvent(new MouseEvent('mousemove', { clientY: 240 }))
+    window.dispatchEvent(new MouseEvent('mouseup'))
+
+    expect(store.get('display.zoneHeight.zone2')).toBeCloseTo(1.2)
+    expect(store.get('display.zoneHeight.zone3')).toBeCloseTo(0.52)
+
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    const savedSnapshot = JSON.parse(localStorage.getItem('popper.preferences'))
+    expect(savedSnapshot.values['display.zoneHeight.zone2']).toBeCloseTo(1.2)
+    expect(savedSnapshot.values['display.zoneHeight.zone3']).toBeCloseTo(0.52)
+  })
+
   it('resizes correctly when snapped left and the flyout is forced to the right side', async () => {
     const store = usePreferenceStore()
     store.batchSet(
@@ -325,5 +346,58 @@ describe('App.vue', () => {
     
     await dragElements[0].trigger('mousedown')
     expect(globalThis.__tauriMockWindow.startDragging).toHaveBeenCalled()
+  })
+
+  it('starts hidden by default when auto-hide is enabled on an edge anchor', async () => {
+    const wrapper = mountApp()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    const root = wrapper.find('.window-root')
+    expect(root.classes()).toContain('auto-hide-enabled')
+    expect(root.classes()).toContain('is-hidden')
+    expect(globalThis.__tauriMockWindow.setSize).toHaveBeenCalled()
+  })
+
+  it('reveals after pointer dwell on the hidden edge sensor', async () => {
+    vi.useFakeTimers()
+
+    try {
+      const wrapper = mountApp()
+      await Promise.resolve()
+
+      const root = wrapper.find('.window-root')
+      expect(root.classes()).toContain('is-hidden')
+
+      await root.trigger('mouseenter')
+      await root.trigger('mousemove')
+      await vi.advanceTimersByTimeAsync(400)
+      await wrapper.vm.$nextTick()
+
+      expect(root.classes()).toContain('is-revealed')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('reveals and focuses the app when the registered global shortcut fires', async () => {
+    const wrapper = mountApp()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    const shortcutEntries = [...globalThis.__tauriGlobalShortcutState.handlers.entries()]
+    const shortcutEntry = shortcutEntries.find(([shortcut]) =>
+      shortcut === 'Ctrl+Shift+Space' || shortcut === 'Control+Shift+Space',
+    )
+
+    expect(shortcutEntry).toBeTruthy()
+
+    const handler = shortcutEntry?.[1]
+    expect(typeof handler).toBe('function')
+
+    await handler()
+    await wrapper.vm.$nextTick()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(wrapper.find('.window-root').classes()).toContain('is-revealed')
+    expect(globalThis.__tauriMockWindow.setFocus).toHaveBeenCalled()
   })
 })

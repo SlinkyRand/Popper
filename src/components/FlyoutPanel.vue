@@ -58,13 +58,12 @@ function initGhostAnchors(rect: { x: number; y: number; width: number; height: n
 function showFlyoutGhostWidth(width: number) {
   const el = ghostRef.value
   if (!el) return
-  // Flyout on left: handle is on the LEFT edge → right edge is fixed, ghost grows leftward
-  // Flyout on right: handle is on the RIGHT edge → left edge is fixed, ghost grows rightward
+  // Position relative to the flyout shell so transformed ancestors don't offset the preview.
   const x = props.side === 'left'
-    ? ghostFixedRight - width        // right edge fixed, grow left
-    : ghostFixedLeft                 // left edge fixed, grow right
+    ? ghostFixedWidth - width
+    : 0
   el.style.left = `${x}px`
-  el.style.top = `${ghostFixedTop}px`
+  el.style.top = '0px'
   el.style.width = `${width}px`
   el.style.height = `${ghostFixedHeight}px`
   el.style.display = 'block'
@@ -73,9 +72,9 @@ function showFlyoutGhostWidth(width: number) {
 function showFlyoutGhostHeight(height: number) {
   const el = ghostRef.value
   if (!el) return
-  // Height handle is always at the bottom → top edge fixed
-  el.style.left = `${ghostFixedLeft}px`
-  el.style.top = `${ghostFixedTop}px`
+  // Height handle is always at the bottom → top edge fixed.
+  el.style.left = '0px'
+  el.style.top = '0px'
   el.style.width = `${ghostFixedWidth}px`
   el.style.height = `${height}px`
   el.style.display = 'block'
@@ -542,7 +541,7 @@ onBeforeUnmount(() => {
 }
 
 .flyout-resize-ghost {
-  position: fixed;
+  position: absolute;
   z-index: 9999;
   pointer-events: none;
   border: 2px solid rgba(255, 255, 255, 0.8);

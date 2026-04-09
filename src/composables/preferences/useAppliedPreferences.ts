@@ -24,6 +24,9 @@ export function useAppliedPreferences() {
   const sidebarCollapsedByDefault = computed(() =>
     Boolean(store.get('display.sidebarCollapsedByDefault') ?? false),
   )
+  const autoHide = computed(() => Boolean(store.get('display.autoHide') ?? true))
+  const edgeTriggerDelay = computed(() => Number(store.get('display.edgeTriggerDelay') ?? 400))
+  const hideGracePeriod = computed(() => Number(store.get('display.hideGracePeriod') ?? 4000))
   const wallpaperSync = computed(() => Boolean(store.get('display.wallpaperSync') ?? true))
   const reducedMotion = computed(() => Boolean(store.get('display.reducedMotion') ?? false))
 
@@ -52,6 +55,9 @@ export function useAppliedPreferences() {
     mainAppWidth,
     flyoutWidth,
     sidebarCollapsedByDefault,
+    autoHide,
+    edgeTriggerDelay,
+    hideGracePeriod,
     wallpaperSync,
     reducedMotion,
   }

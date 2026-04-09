@@ -8,6 +8,8 @@ import {
   FLYOUT_WIDTH_MIN,
   MAIN_APP_WIDTH_DEFAULT,
   MAIN_APP_WIDTH_MIN,
+  ZONE_HEIGHT_DEFAULTS,
+  ZONE_HEIGHT_MIN_PX,
   getMainAppWidthMax,
   getFlyoutWidthMax,
   getFlyoutHeightMax,
@@ -70,6 +72,35 @@ const flyoutHeightSettings = flyoutIds.map((flyoutId) => ({
     get max() { return getFlyoutHeightMax() },
     step: 4,
     unit: 'px',
+  },
+}))
+
+const zoneLabelById = {
+  zone2: 'Section 2',
+  zone3: 'Section 3',
+  zone4: 'Section 4',
+  zone5: 'Section 5',
+} satisfies Record<keyof typeof ZONE_HEIGHT_DEFAULTS, string>
+
+const zoneHeightSettings = Object.entries(ZONE_HEIGHT_DEFAULTS).map(([zoneId, defaultValue]) => ({
+  id: `display.zoneHeight.${zoneId}`,
+  version: 1,
+  tab: 'display' as const,
+  section: 'layout',
+  label: `${zoneLabelById[zoneId as keyof typeof ZONE_HEIGHT_DEFAULTS]} height weight`,
+  description: `Preferred relative height for ${zoneLabelById[zoneId as keyof typeof ZONE_HEIGHT_DEFAULTS]} in the main app column layout.`,
+  controlType: 'slider' as const,
+  defaultValue,
+  syncPolicy: 'device-only' as const,
+  privacyModeDefault: true,
+  conflictStrategy: 'prefer-local' as const,
+  validation: [
+    { type: 'min' as const, value: ZONE_HEIGHT_MIN_PX / 200, message: `Must be at least ${ZONE_HEIGHT_MIN_PX / 200}.` },
+  ],
+  ui: {
+    min: ZONE_HEIGHT_MIN_PX / 200,
+    max: 3,
+    step: 0.01,
   },
 }))
 
@@ -493,6 +524,65 @@ export const preferenceRegistry: PreferenceRegistry = {
       privacyModeDefault: true,
       conflictStrategy: 'prefer-local',
     },
+    {
+      id: 'display.autoHide',
+      version: 1,
+      tab: 'display',
+      section: 'openBehavior',
+      label: 'Auto-hide at screen edge',
+      description: 'Hide Popper by default and reveal it when the pointer dwells on the active screen edge.',
+      controlType: 'toggle',
+      defaultValue: true,
+      syncPolicy: 'device-only',
+      privacyModeDefault: true,
+      conflictStrategy: 'prefer-local',
+    },
+    {
+      id: 'display.edgeTriggerDelay',
+      version: 1,
+      tab: 'display',
+      section: 'openBehavior',
+      label: 'Edge trigger delay',
+      description: 'How long the pointer must rest on the hidden edge sensor before Popper opens.',
+      controlType: 'slider',
+      defaultValue: 400,
+      syncPolicy: 'device-only',
+      privacyModeDefault: true,
+      conflictStrategy: 'prefer-local',
+      validation: [
+        { type: 'min', value: 100, message: 'Must be at least 100ms.' },
+        { type: 'max', value: 2000, message: 'Must be 2000ms or less.' },
+      ],
+      ui: {
+        min: 100,
+        max: 2000,
+        step: 50,
+        unit: 'ms',
+      },
+    },
+    {
+      id: 'display.hideGracePeriod',
+      version: 1,
+      tab: 'display',
+      section: 'openBehavior',
+      label: 'Hide grace period',
+      description: 'How long Popper stays open after the pointer leaves before hiding again.',
+      controlType: 'slider',
+      defaultValue: 4000,
+      syncPolicy: 'device-only',
+      privacyModeDefault: true,
+      conflictStrategy: 'prefer-local',
+      validation: [
+        { type: 'min', value: 100, message: 'Must be at least 100ms.' },
+        { type: 'max', value: 10000, message: 'Must be 10000ms or less.' },
+      ],
+      ui: {
+        min: 100,
+        max: 10000,
+        step: 50,
+        unit: 'ms',
+      },
+    },
 
     // --------------------
     // Display / Appearance
@@ -706,6 +796,7 @@ export const preferenceRegistry: PreferenceRegistry = {
     },
     ...flyoutWidthSettings,
     ...flyoutHeightSettings,
+    ...zoneHeightSettings,
     {
       id: 'display.sidebarCollapsedByDefault',
       version: 1,

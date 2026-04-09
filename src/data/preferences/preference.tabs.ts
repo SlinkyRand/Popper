@@ -81,7 +81,7 @@ export const preferenceTabs: PreferenceTabDefinition[] = [
   },
   {
     id: 'halp',
-    label: 'Halp.',
+    label: 'Halp',
     icon: 'life-buoy',
     kind: 'tab',
     description: 'Support and external contact links.',

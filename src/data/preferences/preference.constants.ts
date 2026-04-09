@@ -7,6 +7,14 @@ export const FLYOUT_WIDTH_MIN = 100
 export const FLYOUT_HEIGHT_DEFAULT = 100
 export const FLYOUT_HEIGHT_MIN = 100
 
+export const ZONE_HEIGHT_MIN_PX = 80
+export const ZONE_HEIGHT_DEFAULTS = {
+  zone2: 1.0,
+  zone3: 0.72,
+  zone4: 0.72,
+  zone5: 0.72,
+} as const
+
 export const PREFERENCES_FLYOUT_WIDTH_DEFAULT = 780
 export const PREFERENCES_FLYOUT_HEIGHT_DEFAULT = 600
 export const PREFERENCES_FLYOUT_WIDTH_MIN = 480

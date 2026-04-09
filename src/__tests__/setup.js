@@ -4,6 +4,7 @@ import { vi } from 'vitest'
 
 const mockWindow = {
   setShadow: vi.fn().mockResolvedValue(undefined),
+  setFocus: vi.fn().mockResolvedValue(undefined),
   minimize: vi.fn().mockResolvedValue(undefined),
   maximize: vi.fn().mockResolvedValue(undefined),
   unmaximize: vi.fn().mockResolvedValue(undefined),
@@ -29,10 +30,24 @@ const mockMonitor = {
   },
 }
 
+const globalShortcutState = {
+  handlers: new Map(),
+}
+
 vi.mock('@tauri-apps/api/window', () => ({
   getCurrentWindow: () => mockWindow,
   currentMonitor: vi.fn().mockResolvedValue(mockMonitor),
 }))
 
+vi.mock('@tauri-apps/plugin-global-shortcut', () => ({
+  register: vi.fn().mockImplementation(async (shortcut, handler) => {
+    globalShortcutState.handlers.set(shortcut, handler)
+  }),
+  unregister: vi.fn().mockImplementation(async (shortcut) => {
+    globalShortcutState.handlers.delete(shortcut)
+  }),
+}))
+
 // Expose for tests that need to inspect calls
 globalThis.__tauriMockWindow = mockWindow
+globalThis.__tauriGlobalShortcutState = globalShortcutState

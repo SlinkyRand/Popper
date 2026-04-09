@@ -4,6 +4,7 @@ import { getCurrentWindow, currentMonitor } from '@tauri-apps/api/window'
 import { LogicalSize, LogicalPosition } from '@tauri-apps/api/dpi'
 import { check } from '@tauri-apps/plugin-updater'
 import { relaunch } from '@tauri-apps/plugin-process'
+import { register, unregister } from '@tauri-apps/plugin-global-shortcut'
 
 import { useGameStore } from './stores/gameStore'
 import { getPlatform } from './platform'
@@ -14,10 +15,13 @@ import PreferenceFlyout from '@/components/preferences/PreferenceFlyout.vue'
 import { installMacAppMenu } from '@/lib/installMacAppMenu'
 import { usePreferenceStore } from '@/stores/preferenceStore'
 import { useAppliedPreferences } from './composables/preferences/useAppliedPreferences'
+import { useAutoHide } from './composables/useAutoHide'
 import {
   FLYOUT_WIDTH_DEFAULT,
   FLYOUT_WIDTH_MIN,
   MAIN_APP_WIDTH_MIN,
+  ZONE_HEIGHT_DEFAULTS,
+  ZONE_HEIGHT_MIN_PX,
   getMainAppWidthMax,
   getFlyoutWidthMax,
   getFlyoutHeightMax,
@@ -62,13 +66,7 @@ const isLayoutReady = ref(false)
 
 // Zone height resize state (zones 2–5, stored as flex-grow ratios)
 const ZONE_HEIGHT_PREF_PREFIX = 'display.zoneHeight.'
-const ZONE_HEIGHT_MIN_PX = 80
-const zoneHeights = ref<Record<string, number>>({
-  zone2: 1.0,
-  zone3: 0.72,
-  zone4: 0.72,
-  zone5: 0.72,
-})
+const zoneHeights = ref<Record<string, number>>({ ...ZONE_HEIGHT_DEFAULTS })
 
 function loadZoneHeights() {
   for (const zone of ['zone2', 'zone3', 'zone4', 'zone5']) {
@@ -127,7 +125,7 @@ function startZoneResize(topZone: string, bottomZone: string, event: MouseEvent)
     zoneGhostBottomHeight = bottomRect.height
     zoneGhostTopY = topRect.top
     zoneGhostBottomY = bottomRect.top
-    showGhost({ x: topRect.left, y: topRect.top, width: topRect.width, height: topRect.height })
+    showGhostFromRect({ x: topRect.left, y: topRect.top, width: topRect.width, height: topRect.height })
   }
 
   window.addEventListener('mousemove', onZoneResize)
@@ -149,7 +147,7 @@ function onZoneResize(event: MouseEvent) {
   if (zoneGhostTopEl && ghostRef.value) {
     const topRect = zoneGhostTopEl.getBoundingClientRect()
     const newTopHeight = zoneGhostTopHeight + delta
-    showGhost({
+    showGhostFromRect({
       x: topRect.left,
       y: zoneGhostTopY,
       width: topRect.width,
@@ -195,7 +193,8 @@ const zone4Ref = ref<HTMLElement | null>(null)
 const counterRef = ref<HTMLElement | null>(null)
 
 const { activeFlyout, closeFlyout, toggleFlyout, isOpen } = useFlyouts()
-const { mainAppWidth } = useAppliedPreferences()
+const { mainAppWidth, autoHide, edgeTriggerDelay, hideGracePeriod, reducedMotion } =
+  useAppliedPreferences()
 
 type FlyoutSide = 'left' | 'right'
 type WindowAnchor = 'left' | 'right' | 'center'
@@ -297,15 +296,53 @@ const totalWindowWidth = computed(() =>
   clampMainAppWidth(mainAppWidth.value) + activeFlyoutOffset.value,
 )
 
+const enableGlobalHotkeys = computed(() =>
+  Boolean(preferenceStore.get('hotkeys.enableGlobalHotkeys') ?? true),
+)
+const globalOpenAppHotkey = computed(() =>
+  String(preferenceStore.get('hotkeys.globalOpenApp') ?? 'Ctrl+Shift+Space'),
+)
+
+const {
+  sensorStripWidth,
+  revealedGraceZoneWidth,
+  isAutoHideEnabled,
+  isRevealed,
+  desiredWindowWidth,
+  reveal,
+  clearTimers: clearAutoHideTimers,
+  handleMouseEnter: handleAutoHideMouseEnter,
+  handleMouseMove: handleAutoHideMouseMove,
+  handleMouseLeave: handleAutoHideMouseLeave,
+} = useAutoHide({
+  enabled: autoHide,
+  anchor: effectiveWindowAnchor,
+  edgeTriggerDelay,
+  hideGracePeriod,
+  totalWindowWidth,
+})
+
+const contentHorizontalOffset = computed(() =>
+  isAutoHideEnabled.value && isRevealed.value && effectiveWindowAnchor.value === 'right'
+    ? revealedGraceZoneWidth.value
+    : 0,
+)
+
 const windowRootStyle = computed(() => ({
   ...gradientStyleVars.value,
   '--active-flyout-width': `${activeFlyoutWidth.value}px`,
   '--active-flyout-offset': `${activeFlyoutOffset.value}px`,
   '--flyout-gap': `${flyoutGap.value}px`,
   '--pref-main-app-width': `${clampMainAppWidth(mainAppWidth.value)}px`,
+  '--window-frame-width': `${Math.round(desiredWindowWidth.value)}px`,
+  '--total-window-width': `${Math.round(totalWindowWidth.value)}px`,
+  '--auto-hide-sensor-width': `${sensorStripWidth.value}px`,
+  '--revealed-grace-zone-width': `${revealedGraceZoneWidth.value}px`,
+  '--content-horizontal-offset': `${contentHorizontalOffset.value}px`,
+  '--auto-hide-duration': reducedMotion.value ? '0ms' : '360ms',
 }))
 
-const showMainResizeHandle = computed(() => true)
+const showMainResizeHandle = computed(() => !isAutoHideEnabled.value || isRevealed.value)
 const hasActiveFlyout = computed(() => activeFlyout.value !== null)
 const isFlyoutOnLeft = computed(() => hasActiveFlyout.value && activeFlyoutSide.value === 'left')
 const workAreaBounds = ref<WorkAreaRect | null>(null)
@@ -488,7 +525,7 @@ async function syncWindowFrame() {
     const currentX = currentOuterPosition.toLogical(scale).x
     const currentY = currentOuterPosition.toLogical(scale).y
 
-    const desiredWidth = Math.round(Math.min(totalWindowWidth.value, workArea.width))
+    const desiredWidth = Math.round(Math.min(desiredWindowWidth.value, workArea.width))
     const desiredHeight = Math.round(Math.min(currentHeight, workArea.height))
 
     let nextX = workArea.x
@@ -544,10 +581,136 @@ function scheduleWindowSync() {
 }
 
 watch(
-  [mainAppWidth, activeFlyoutWidth, activeFlyout, effectiveWindowAnchor],
+  [mainAppWidth, activeFlyoutWidth, activeFlyout, effectiveWindowAnchor, isRevealed, isAutoHideEnabled],
   scheduleWindowSync,
   { flush: 'post' },
 )
+
+function normalizeGlobalShortcutToken(token: string) {
+  const lower = token.trim().toLowerCase()
+
+  if (lower === 'alt' || lower === 'option') {
+    return 'Alt'
+  }
+
+  if (lower === 'shift') {
+    return 'Shift'
+  }
+
+  if (lower === 'space' || lower === 'spacebar') {
+    return 'Space'
+  }
+
+  if (lower === 'meta' || lower === 'cmd' || lower === 'command') {
+    return 'Command'
+  }
+
+  if (token.length === 1) {
+    return token.toUpperCase()
+  }
+
+  return token[0].toUpperCase() + token.slice(1)
+}
+
+function getGlobalShortcutCandidates(shortcut: string) {
+  const rawParts = shortcut
+    .split('+')
+    .map((part) => part.trim())
+    .filter(Boolean)
+
+  const hasCtrlLikeModifier = rawParts.some((part) => {
+    const lower = part.toLowerCase()
+    return (
+      lower === 'ctrl' ||
+      lower === 'control' ||
+      lower === 'cmdorctrl' ||
+      lower === 'commandorcontrol'
+    )
+  })
+
+  const baseTokens = rawParts
+    .filter((part) => {
+      const lower = part.toLowerCase()
+      return !(
+        lower === 'ctrl' ||
+        lower === 'control' ||
+        lower === 'cmdorctrl' ||
+        lower === 'commandorcontrol'
+      )
+    })
+    .map(normalizeGlobalShortcutToken)
+
+  const modifierVariants = hasCtrlLikeModifier
+    ? platform.isMac
+      ? ['Command', 'CmdOrCtrl', 'CommandOrControl']
+      : ['Ctrl', 'Control']
+    : ['']
+
+  return [...new Set(
+    modifierVariants
+      .map((modifier) => [modifier, ...baseTokens].filter(Boolean).join('+'))
+      .filter(Boolean),
+  )]
+}
+
+let registeredGlobalShortcuts: string[] = []
+
+async function unregisterGlobalOpenShortcut() {
+  const shortcutsToRemove = [...registeredGlobalShortcuts]
+  registeredGlobalShortcuts = []
+
+  await Promise.all(shortcutsToRemove.map(async (shortcut) => {
+    try {
+      await unregister(shortcut)
+    } catch (error) {
+      console.error(`Failed to unregister global shortcut "${shortcut}"`, error)
+    }
+  }))
+}
+
+async function revealAppWindow() {
+  reveal()
+  await lockWorkAreaForInteraction()
+  await syncWindowFrame()
+  scheduleWorkAreaUnlock()
+
+  try {
+    await appWindow.setFocus()
+  } catch (error) {
+    console.error('Failed to focus app window', error)
+  }
+}
+
+async function syncGlobalOpenShortcut() {
+  await unregisterGlobalOpenShortcut()
+
+  if (!enableGlobalHotkeys.value) {
+    return
+  }
+
+  const rawShortcut = globalOpenAppHotkey.value.trim()
+  if (!rawShortcut) {
+    return
+  }
+
+  const accelerators = getGlobalShortcutCandidates(rawShortcut)
+
+  for (const accelerator of accelerators) {
+    try {
+      await register(accelerator, () => {
+        void revealAppWindow()
+      })
+      registeredGlobalShortcuts.push(accelerator)
+      return
+    } catch (error) {
+      console.error(`Failed to register global shortcut "${accelerator}"`, error)
+    }
+  }
+}
+
+watch([enableGlobalHotkeys, globalOpenAppHotkey], () => {
+  void syncGlobalOpenShortcut()
+}, { flush: 'post' })
 
 async function checkForUpdatesSilently() {
   try {
@@ -583,6 +746,7 @@ onMounted(async () => {
   await lockWorkAreaForInteraction()
   await syncWindowFrame()
   scheduleWorkAreaUnlock()
+  await syncGlobalOpenShortcut()
 
   // Re-read work area whenever the window moves to a monitor with a different
   // scale factor (e.g. laptop screen ↔ external display).
@@ -598,6 +762,8 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  void unregisterGlobalOpenShortcut()
+  clearAutoHideTimers()
   stopMainAppResize()
 
   if (resizeTimeout !== null) {
@@ -652,11 +818,23 @@ function handleButtonClick(index: number) {
 }
 
 function handleFlyoutToggle(id: FlyoutId) {
+  clearAutoHideTimers()
+
+  if (isAutoHideEnabled.value && !isRevealed.value) {
+    void revealAppWindow()
+  }
+
   void lockWorkAreaForInteraction()
   toggleFlyout(id)
 }
 
 function openPreferencesFlyout() {
+  clearAutoHideTimers()
+
+  if (isAutoHideEnabled.value && !isRevealed.value) {
+    void revealAppWindow()
+  }
+
   void lockWorkAreaForInteraction()
 
   if (!isOpen('preferences')) {
@@ -692,9 +870,31 @@ function handleCatButtonClick() {
       'anchor-left': effectiveWindowAnchor === 'left',
       'anchor-right': effectiveWindowAnchor === 'right',
       'anchor-center': effectiveWindowAnchor === 'center',
+      'auto-hide-enabled': isAutoHideEnabled,
+      'is-revealed': !isAutoHideEnabled || isRevealed,
+      'is-hidden': isAutoHideEnabled && !isRevealed,
     }"
     :style="windowRootStyle"
+    @mouseenter="handleAutoHideMouseEnter"
+    @mousemove="handleAutoHideMouseMove"
+    @mouseleave="handleAutoHideMouseLeave"
   >
+    <div
+      v-if="isAutoHideEnabled && !isRevealed"
+      class="auto-hide-sensor"
+      @mouseenter="handleAutoHideMouseEnter"
+      @mousemove="handleAutoHideMouseMove"
+      @mouseleave="handleAutoHideMouseLeave"
+    />
+
+    <div
+      v-if="isAutoHideEnabled && isRevealed"
+      class="auto-hide-grace-zone"
+      @mouseenter="handleAutoHideMouseEnter"
+      @mousemove="handleAutoHideMouseMove"
+      @mouseleave="handleAutoHideMouseLeave"
+    />
+
     <div class="app-shell">
       <div class="gradient-layer" :class="{ ready: isReady }" :data-fallback="isFallback" />
       <div class="window-surface">
@@ -948,13 +1148,53 @@ html, body, #app {
       rgba(255, 255, 255, 0.1)
     );
 
-  width: calc(var(--pref-main-app-width) + var(--active-flyout-offset));
+  width: var(--window-frame-width);
   height: 100dvh;
   min-height: 100dvh;
   max-width: none;
   background: transparent;
   position: relative;
   overflow: visible;
+}
+
+.window-root.auto-hide-enabled {
+  overflow: hidden;
+}
+
+.auto-hide-sensor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: var(--auto-hide-sensor-width);
+  z-index: 90;
+  background: transparent;
+  pointer-events: auto;
+}
+
+.window-root.anchor-left .auto-hide-sensor {
+  left: 0;
+}
+
+.window-root.anchor-right .auto-hide-sensor {
+  right: 0;
+}
+
+.auto-hide-grace-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: var(--revealed-grace-zone-width);
+  z-index: 85;
+  background: transparent;
+  pointer-events: auto;
+}
+
+.window-root.anchor-left .auto-hide-grace-zone {
+  right: 0;
+}
+
+.window-root.anchor-right .auto-hide-grace-zone {
+  left: 0;
 }
 
 .window-root.anchor-left {
@@ -984,13 +1224,13 @@ html, body, #app {
 }
 
 .window-root.flyout-on-left .app-shell {
-  left: var(--active-flyout-offset);
+  left: calc(var(--active-flyout-offset) + var(--content-horizontal-offset));
   right: auto;
 }
 
 .window-root.flyout-on-right .app-shell,
 .window-root.no-flyout .app-shell {
-  left: 0;
+  left: var(--content-horizontal-offset);
   right: auto;
 }
 
@@ -1078,23 +1318,63 @@ html, body, #app {
 }
 
 .window-root.flyout-on-left .app-resize-handle {
-  left: calc(var(--active-flyout-width) + (var(--flyout-gap) / 2) - 4px);
+  left: calc(var(--content-horizontal-offset) + var(--active-flyout-width) + (var(--flyout-gap) / 2) - 4px);
 }
 
 .window-root.flyout-on-right .app-resize-handle {
-  left: calc(var(--pref-main-app-width) + (var(--flyout-gap) / 2) - 4px);
+  left: calc(var(--content-horizontal-offset) + var(--pref-main-app-width) + (var(--flyout-gap) / 2) - 4px);
 }
 
 .window-root.no-flyout .app-resize-handle {
-  left: calc(var(--pref-main-app-width) - 4px);
+  left: calc(var(--content-horizontal-offset) + var(--pref-main-app-width) - 4px);
 }
 
 .flyout-layer {
   position: absolute;
-  inset: 0;
+  top: 0;
+  bottom: 0;
+  left: var(--content-horizontal-offset);
+  width: var(--total-window-width);
   z-index: 40;
   overflow: visible;
   pointer-events: none;
+}
+
+.window-root.auto-hide-enabled .app-shell,
+.window-root.auto-hide-enabled .flyout-layer,
+.window-root.auto-hide-enabled .app-resize-handle {
+  transition:
+    transform var(--auto-hide-duration) cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 180ms ease;
+  will-change: transform;
+}
+
+.window-root.auto-hide-enabled.anchor-right.is-hidden .app-shell,
+.window-root.auto-hide-enabled.anchor-right.is-hidden .flyout-layer,
+.window-root.auto-hide-enabled.anchor-right.is-hidden .app-resize-handle {
+  transform: translateX(calc(var(--total-window-width) - var(--auto-hide-sensor-width)));
+}
+
+.window-root.auto-hide-enabled.anchor-left.is-hidden .app-shell,
+.window-root.auto-hide-enabled.anchor-left.is-hidden .flyout-layer,
+.window-root.auto-hide-enabled.anchor-left.is-hidden .app-resize-handle {
+  transform: translateX(calc(-1 * (var(--total-window-width) - var(--auto-hide-sensor-width))));
+}
+
+.window-root.auto-hide-enabled.is-hidden .app-shell,
+.window-root.auto-hide-enabled.is-hidden .flyout-layer,
+.window-root.auto-hide-enabled.is-hidden .app-resize-handle {
+  pointer-events: none;
+}
+
+.window-root.auto-hide-enabled.is-hidden {
+  cursor: default;
+}
+
+.window-root.auto-hide-enabled.is-revealed .app-shell,
+.window-root.auto-hide-enabled.is-revealed .flyout-layer,
+.window-root.auto-hide-enabled.is-revealed .app-resize-handle {
+  transform: translateX(0);
 }
 
 .flyout-layer > * {
@@ -1379,16 +1659,6 @@ html, body, #app {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
   width: min(100%, 520px);
-}
-
-@media (max-width: 860px) {
-  .zone-2,
-  .zone-3,
-  .zone-4,
-  .zone-5 {
-    flex: 0 0 auto;
-    min-height: 160px;
-  }
 }
 
 .popper-button {

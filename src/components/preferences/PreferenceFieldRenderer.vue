@@ -107,6 +107,12 @@ async function handleAction() {
           store.getDefinition('display.flyoutSide')?.defaultValue ?? 'auto',
         'display.snapToScreenEdge':
           store.getDefinition('display.snapToScreenEdge')?.defaultValue ?? true,
+        'display.autoHide':
+          store.getDefinition('display.autoHide')?.defaultValue ?? true,
+        'display.edgeTriggerDelay':
+          store.getDefinition('display.edgeTriggerDelay')?.defaultValue ?? 400,
+        'display.hideGracePeriod':
+          store.getDefinition('display.hideGracePeriod')?.defaultValue ?? 4000,
         [MAIN_APP_WIDTH_PREFERENCE_ID]:
           store.getDefinition(MAIN_APP_WIDTH_PREFERENCE_ID)?.defaultValue ?? MAIN_APP_WIDTH_DEFAULT,
         'display.flyoutWidth':
